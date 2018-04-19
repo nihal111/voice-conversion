@@ -15,7 +15,6 @@ import numpy as np
 import tensorflow as tf
 
 import hyperparams as hp
-from hyperparams import logdir_path
 
 import matplotlib.pyplot as plt
 
@@ -27,11 +26,11 @@ num_features = 40
 # HYPER PARAMETERS
 TRAIN_CAP = 1000
 TEST_CAP = 500
-num_layers = 3
-num_hidden = 100
-learning_rate = 0.01
-num_epochs = 40
-batch_size = 100
+NUM_LAYERS = 3
+NUM_HIDDEN = 100
+LEARNING_RATE = 0.01
+NUM_EPOCHS = 40
+BATCH_SIZE = 100
 
 SAVE_DIR = "./checkpoint/save"
 PLOTTING = True
@@ -45,9 +44,20 @@ def initialise_plot():
     plt.show()
     plt.gcf().clear()
     plt.title('NH={} NL={} LR={} BS={}'.format(
-        num_hidden, num_layers, learning_rate, batch_size))
+        NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE))
     plt.xlabel('Epoch')
     plt.ylabel('Accuracy')
+
+
+def annot_max(x, y, ax=None):
+    xmax = x[np.argmax(y)]
+    ymax = y.max()
+    text = "Max accuracy\nx={}, y={:.3f}".format(xmax, ymax)
+    if not ax:
+        ax = plt.gca()
+    bbox_props = dict(boxstyle="square,pad=0.3", fc="w", ec="k", lw=0.72)
+    plt.annotate(text, xy=(0.75, 0.1),
+                 xycoords='axes fraction', bbox=bbox_props)
 
 
 def plot_graph(train_accuracy, test_accuracy):
@@ -60,6 +70,8 @@ def plot_graph(train_accuracy, test_accuracy):
              SAVE_PER_EPOCHS, np.array(train_accuracy))
     plt.plot(np.arange(1, len(test_accuracy) + 1) *
              SAVE_PER_EPOCHS, np.array(test_accuracy))
+    x = np.array(np.arange(len(test_accuracy)))
+    annot_max(x, np.asarray(test_accuracy))
     plt.legend(['Train', 'Test'], loc='upper left')
     plt.draw()
     plt.pause(0.0001)
@@ -67,7 +79,7 @@ def plot_graph(train_accuracy, test_accuracy):
 
 def save_plot():
     plt.savefig('./images/{}_{}_{}_{}.png'.format(
-        num_hidden, num_layers, learning_rate, batch_size),
+        NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE),
         bbox_inches='tight')
 
 
@@ -248,8 +260,25 @@ def load_test_data():
 
 def get_arguments():
     parser = argparse.ArgumentParser()
-    parser.add_argument('case', type=str, help='experiment case name')
+    optional = parser.add_argument_group('hyperparams')
+    optional.add_argument('--nh', type=int, required=False,
+                          help='number of hidden nodes')
+    optional.add_argument('--nl', type=int, required=False,
+                          help='number of lstm layers')
+    optional.add_argument('--epochs', type=int, required=False,
+                          help='number of epochs')
+    optional.add_argument('--batch_size', type=int,
+                          required=False, help='BATCH_SIZE')
     arguments = parser.parse_args()
+    global NUM_HIDDEN, NUM_LAYERS, NUM_EPOCHS, BATCH_SIZE
+    if arguments.nh:
+        NUM_HIDDEN = arguments.nh
+    if arguments.nl:
+        NUM_LAYERS = arguments.nl
+    if arguments.epochs:
+        NUM_EPOCHS = arguments.epochs
+    if arguments.batch_size:
+        BATCH_SIZE = arguments.batch_size
     return arguments
 
 
@@ -272,17 +301,21 @@ def one_hot(indices, depth=num_classes):
     return one_hot_labels
 
 
-if __name__ == '__main__':
-    args = get_arguments()
-    case = args.case
-    logdir = '{}/{}/train1'.format(logdir_path, case)
+def set_parameters(nh, nl, epochs, batch_size):
+    global NUM_HIDDEN, NUM_LAYERS, NUM_EPOCHS, BATCH_SIZE
+    NUM_HIDDEN = nh
+    NUM_LAYERS = nl
+    NUM_EPOCHS = epochs
+    BATCH_SIZE = BATCH_SIZE
 
+
+def train():
     graph = tf.Graph()
     with graph.as_default():
-        # Input placeholder of shape [batch_size, num_frames, num_mfcc_features]
+        # Input placeholder of shape [BATCH_SIZE, num_frames, num_mfcc_features]
         inputs = tf.placeholder(tf.float32, [None, None, num_features])
 
-        # Target placeholder of shape [batch_size, num_frames, num_phn_classes]
+        # Target placeholder of shape [BATCH_SIZE, num_frames, num_phn_classes]
         targets = tf.placeholder(tf.int32, [None, None, num_classes])
 
         # List of sequence lengths (num_frames)
@@ -295,13 +328,13 @@ if __name__ == '__main__':
                 lstm, output_keep_prob=keep_prob)
             return drop
 
-        # Make a multi layer RNN of num_layers layers of cells
+        # Make a multi layer RNN of NUM_LAYERS layers of cells
         stack = tf.nn.rnn_cell.MultiRNNCell(
-            [get_a_cell(num_hidden) for _ in range(num_layers)])
+            [get_a_cell(NUM_HIDDEN) for _ in range(NUM_LAYERS)])
 
         # outputs is the output of the RNN at each time step (frame)
-        # RNN has num_hidden output nodes
-        # outputs has shape [batch_size, num_frames, num_hidden]
+        # RNN has NUM_HIDDEN output nodes
+        # outputs has shape [BATCH_SIZE, num_frames, NUM_HIDDEN]
         # The second output is the last state and we will not use that
         outputs, _ = tf.nn.dynamic_rnn(
             stack, inputs, seq_len, dtype=tf.float32)
@@ -311,14 +344,14 @@ if __name__ == '__main__':
         batch_s, max_timesteps = shape[0], shape[1]
 
         # Reshaping to apply the same weights over the timesteps
-        # outputs is now of shape [batch_size*num_frames, num_hidden]
+        # outputs is now of shape [BATCH_SIZE*num_frames, NUM_HIDDEN]
         # So the same weights are trained for each timestep of each sequence
-        outputs = tf.reshape(outputs, [-1, num_hidden])
+        outputs = tf.reshape(outputs, [-1, NUM_HIDDEN])
 
         # Truncated normal with mean 0 and stdev=0.1
         # Tip: Try another initialization
         # see https://www.tensorflow.org/versions/r0.9/api_docs/python/contrib.layers.html#initializers
-        W = tf.Variable(tf.truncated_normal([num_hidden,
+        W = tf.Variable(tf.truncated_normal([NUM_HIDDEN,
                                              num_classes],
                                             stddev=0.1))
         # Zero initialization
@@ -338,7 +371,7 @@ if __name__ == '__main__':
                 logits=logits, labels=targets))
 
         optimizer = tf.train.AdamOptimizer(
-            learning_rate).minimize(cross_entropy)
+            LEARNING_RATE).minimize(cross_entropy)
 
         # define an accuracy assessment operation
         correct_prediction = tf.equal(
@@ -351,7 +384,7 @@ if __name__ == '__main__':
     with tf.Session(graph=graph) as sess:
         saver = tf.train.Saver()
         SAVE_PATH = SAVE_DIR + '_{}_{}_{}_{}/model.ckpt'.format(
-            num_hidden, num_layers, learning_rate, batch_size)
+            NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE)
         try:
             saver.restore(sess, SAVE_PATH)
             print("Model restored.\n")
@@ -365,7 +398,7 @@ if __name__ == '__main__':
         if PLOTTING:
             initialise_plot()
 
-        for epoch in range(1, num_epochs + 1):
+        for epoch in range(1, NUM_EPOCHS + 1):
             train_cost = train_ler = 0
             start = time.time()
 
@@ -384,20 +417,20 @@ if __name__ == '__main__':
                 test_inputs = (test_inputs - np.mean(test_inputs)) / \
                     np.std(test_inputs)
 
-            for batch in range(int(num_examples / batch_size)):
+            for batch in range(int(num_examples / BATCH_SIZE)):
 
                 batch_x, batch_y, batch_seq_len = next_batch(
-                    batch_size, train_inputs, train_targets)
+                    BATCH_SIZE, train_inputs, train_targets)
 
                 feed = {inputs: batch_x,
                         targets: batch_y,
                         seq_len: batch_seq_len}
 
                 batch_cost, _ = sess.run([cross_entropy, optimizer], feed)
-                train_cost += batch_cost * batch_size
+                train_cost += batch_cost * BATCH_SIZE
 
             print("Epoch {}/{}, train_cost = {:.3f}, time = {:.3f}".format(
-                epoch, num_epochs, train_cost, time.time() - start))
+                epoch, NUM_EPOCHS, train_cost, time.time() - start))
 
             if (epoch % SAVE_PER_EPOCHS == 0):
                 save_path = saver.save(sess, SAVE_PATH)
@@ -424,7 +457,7 @@ if __name__ == '__main__':
 
                 log = "\nEpoch {}/{}, train_cost = {:.3f}, " + \
                     "train_acc = {:.3f}, test_acc = {:.3f} time = {:.3f}\n"
-                print(log.format(epoch, num_epochs, train_cost, train_acc,
+                print(log.format(epoch, NUM_EPOCHS, train_cost, train_acc,
                                  test_acc, time.time() - start))
 
                 train_accuracy.append(train_acc)
@@ -435,3 +468,14 @@ if __name__ == '__main__':
 
         if PLOTTING:
             save_plot()
+
+
+if __name__ == '__main__':
+    args = get_arguments()
+    params_arr = [{'nh': 50, 'nl': 1, 'epochs': 10, 'batch_size': 100},
+                  {'nh': 100, 'nl': 1, 'epochs': 300, 'batch_size': 100},
+                  {'nh': 150, 'nl': 1, 'epochs': 300, 'batch_size': 100},
+                  {'nh': 50, 'nl': 2, 'epochs': 300, 'batch_size': 100}]
+    for params in params_arr:
+        set_parameters(**params)
+        train()
