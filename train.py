@@ -49,10 +49,10 @@ def initialise_plot():
     plt.ylabel('Accuracy')
 
 
-def annot_max(x, y, ax=None):
-    xmax = x[np.argmax(y)]
+def annotate_max(x, y, ax=None):
+    xmax = (x[np.argmax(y)] + 1) * SAVE_PER_EPOCHS
     ymax = y.max()
-    text = "Max accuracy\nx={}, y={:.3f}".format(xmax, ymax)
+    text = "Max accuracy\nEpoch={}, Accuracy={:.3f}".format(xmax, ymax)
     if not ax:
         ax = plt.gca()
     bbox_props = dict(boxstyle="square,pad=0.3", fc="w", ec="k", lw=0.72)
@@ -71,7 +71,7 @@ def plot_graph(train_accuracy, test_accuracy):
     plt.plot(np.arange(1, len(test_accuracy) + 1) *
              SAVE_PER_EPOCHS, np.array(test_accuracy))
     x = np.array(np.arange(len(test_accuracy)))
-    annot_max(x, np.asarray(test_accuracy))
+    annotate_max(x, np.asarray(test_accuracy))
     plt.legend(['Train', 'Test'], loc='upper left')
     plt.draw()
     plt.pause(0.0001)
@@ -336,8 +336,9 @@ def train():
         # RNN has NUM_HIDDEN output nodes
         # outputs has shape [BATCH_SIZE, num_frames, NUM_HIDDEN]
         # The second output is the last state and we will not use that
-        outputs, _ = tf.nn.dynamic_rnn(
-            stack, inputs, seq_len, dtype=tf.float32)
+        (output_fw, output_bw), _ = tf.nn.bidirectional_dynamic_rnn(
+            stack, stack, inputs, seq_len, dtype=tf.float32)
+        outputs = tf.concat([output_fw, output_bw], axis=2)
 
         # Save input shape for restoring later
         shape = tf.shape(inputs)
@@ -346,12 +347,12 @@ def train():
         # Reshaping to apply the same weights over the timesteps
         # outputs is now of shape [BATCH_SIZE*num_frames, NUM_HIDDEN]
         # So the same weights are trained for each timestep of each sequence
-        outputs = tf.reshape(outputs, [-1, NUM_HIDDEN])
+        outputs = tf.reshape(outputs, [-1, 2 * NUM_HIDDEN])
 
         # Truncated normal with mean 0 and stdev=0.1
         # Tip: Try another initialization
         # see https://www.tensorflow.org/versions/r0.9/api_docs/python/contrib.layers.html#initializers
-        W = tf.Variable(tf.truncated_normal([NUM_HIDDEN,
+        W = tf.Variable(tf.truncated_normal([2 * NUM_HIDDEN,
                                              num_classes],
                                             stddev=0.1))
         # Zero initialization
@@ -472,10 +473,18 @@ def train():
 
 if __name__ == '__main__':
     args = get_arguments()
-    params_arr = [{'nh': 50, 'nl': 1, 'epochs': 10, 'batch_size': 100},
+    params_arr = [{'nh': 50, 'nl': 1, 'epochs': 300, 'batch_size': 100},
+                  {'nh': 75, 'nl': 1, 'epochs': 300, 'batch_size': 100},
                   {'nh': 100, 'nl': 1, 'epochs': 300, 'batch_size': 100},
-                  {'nh': 150, 'nl': 1, 'epochs': 300, 'batch_size': 100},
-                  {'nh': 50, 'nl': 2, 'epochs': 300, 'batch_size': 100}]
+                  {'nh': 50, 'nl': 2, 'epochs': 300, 'batch_size': 100},
+                  {'nh': 75, 'nl': 2, 'epochs': 300, 'batch_size': 100},
+                  {'nh': 100, 'nl': 2, 'epochs': 300, 'batch_size': 100},
+                  {'nh': 50, 'nl': 3, 'epochs': 300, 'batch_size': 100},
+                  {'nh': 75, 'nl': 3, 'epochs': 300, 'batch_size': 100},
+                  {'nh': 100, 'nl': 3, 'epochs': 300, 'batch_size': 100},
+                  {'nh': 50, 'nl': 4, 'epochs': 300, 'batch_size': 100},
+                  {'nh': 75, 'nl': 4, 'epochs': 300, 'batch_size': 100},
+                  {'nh': 100, 'nl': 4, 'epochs': 300, 'batch_size': 100}]
     for params in params_arr:
         set_parameters(**params)
         train()
