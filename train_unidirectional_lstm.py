@@ -6,7 +6,6 @@ import glob
 import argparse
 import sys
 import os.path
-import pickle
 import time
 
 from scipy import signal
@@ -36,7 +35,7 @@ SAVE_DIR = "./checkpoint/save"
 PLOTTING = True
 
 SAVE_PER_EPOCHS = 1
-SHUFFLE_PER_EPOCHS = 20
+RESAMPLE_PER_EPOCHS = 20
 
 
 def initialise_plot():
@@ -49,10 +48,10 @@ def initialise_plot():
     plt.ylabel('Accuracy')
 
 
-def annot_max(x, y, ax=None):
+def annotate_max(x, y, ax=None):
     xmax = (x[np.argmax(y)] + 1) * SAVE_PER_EPOCHS
     ymax = y.max()
-    text = "Max accuracy\nx={}, y={:.3f}".format(xmax, ymax)
+    text = "Max accuracy\nEpoch={}, Accuracy={:.3f}".format(xmax, ymax)
     if not ax:
         ax = plt.gca()
     bbox_props = dict(boxstyle="square,pad=0.3", fc="w", ec="k", lw=0.72)
@@ -71,7 +70,7 @@ def plot_graph(train_accuracy, test_accuracy):
     plt.plot(np.arange(1, len(test_accuracy) + 1) *
              SAVE_PER_EPOCHS, np.array(test_accuracy))
     x = np.array(np.arange(len(test_accuracy)))
-    annot_max(x, np.asarray(test_accuracy))
+    annotate_max(x, np.asarray(test_accuracy))
     plt.legend(['Train', 'Test'], loc='upper left')
     plt.draw()
     plt.pause(0.0001)
@@ -147,7 +146,7 @@ def _get_mfcc_log_spec_and_log_mel_spec(wav, preemphasis_coeff, n_fft, win_lengt
     return mfccs.T, mag.T, mel.T  # (t, n_mfccs), (t, 1+n_fft/2), (t, n_mels)
 
 
-def get_mfccs_and_phones(wav_file, sr, trim=False, random_crop=True, length=int(hp.Default.duration / hp.Default.frame_shift + 1)):
+def get_mfccs_and_phones(wav_file, sr, trim=False, random_crop=False, length=int(hp.Default.duration / hp.Default.frame_shift + 1)):
     '''
     This is applied in `train1` or `test1` phase.
 
@@ -186,19 +185,18 @@ def get_mfccs_and_phones(wav_file, sr, trim=False, random_crop=True, length=int(
         phns = phns[start:end]
         assert (len(mfccs) == len(phns))
 
-    # Random crop
-    if random_crop:
-        start = np.random.choice(
-            range(np.maximum(1, len(mfccs) - length)), 1)[0]
-        end = start + length
-        mfccs = mfccs[start:end]
-        phns = phns[start:end]
-        assert (len(mfccs) == len(phns))
+    # # Random crop
+    # if random_crop:
+    #     start = np.random.choice(
+    #         range(np.maximum(1, len(mfccs) - length)), 1)[0]
+    #     end = start + length
+    #     mfccs = mfccs[start:end]
+    #     phns = phns[start:end]
+    #     assert (len(mfccs) == len(phns))
 
-    # Padding or crop
-    mfccs = librosa.util.fix_length(mfccs, length, axis=0)
-    phns = librosa.util.fix_length(phns, length, axis=0)
-
+    # # Padding or crop
+    # mfccs = librosa.util.fix_length(mfccs, length, axis=0)
+    # phns = librosa.util.fix_length(phns, length, axis=0)
     return mfccs, phns
 
 
@@ -206,56 +204,79 @@ def load_train_data():
     wav_files = sorted(glob.glob(hp.Train1.data_path))
     x = []
     y = []
-    if os.path.isfile(hp.Train1.mfccs_file_path) and os.path.isfile(hp.Train1.phns_file_path):
-        with open(hp.Train1.mfccs_file_path, 'rb') as fp:
-            x = pickle.load(fp)
-        with open(hp.Train1.phns_file_path, 'rb') as fp:
-            y = pickle.load(fp)
+    if os.path.isfile(hp.Train1.npz_file_path):
+        with np.load(hp.Train1.npz_file_path) as data:
+            x = data['mfccs']
+            y = data['phns']
     else:
         for i in xrange(len(wav_files)):
             mfccs, phns = get_mfccs_and_phones(wav_files[i], hp.Default.sr)
             x.append(mfccs)
             y.append(phns)
             print("File {}".format(i))
-        with open(hp.Train1.mfccs_file_path, 'wb') as fp:
-            pickle.dump(x, fp)
-        with open(hp.Train1.phns_file_path, 'wb') as fp2:
-            pickle.dump(y, fp2)
+        with open(hp.Train1.npz_file_path, 'wb') as fp:
+            np.savez_compressed(fp, mfccs=x, phns=y)
+
     print("Loaded mfccs and phns from TRAIN data")
-    idx = np.arange(0, len(x))
-    np.random.shuffle(idx)
-    idx = idx[:TRAIN_CAP]
-    x_shuffle = [x[i] for i in idx]
-    y_shuffle = [y[i] for i in idx]
-    return np.array(x_shuffle), np.array(y_shuffle)
+
+    # # Shuffle
+    # idx = np.arange(0, len(x))
+    # np.random.shuffle(idx)
+    # idx = idx[:TRAIN_CAP]
+    # x_shuffle = [x[i] for i in idx]
+    # y_shuffle = [y[i] for i in idx]
+    return np.asarray(x), np.asarray(y)
 
 
 def load_test_data():
     wav_files = sorted(glob.glob(hp.Test1.data_path))
     x = []
     y = []
-    if os.path.isfile(hp.Test1.mfccs_file_path) and os.path.isfile(hp.Test1.phns_file_path):
-        with open(hp.Test1.mfccs_file_path, 'rb') as fp:
-            x = pickle.load(fp)
-        with open(hp.Test1.phns_file_path, 'rb') as fp:
-            y = pickle.load(fp)
+    if os.path.isfile(hp.Test1.npz_file_path):
+        with np.load(hp.Test1.npz_file_path) as data:
+            x = data['mfccs']
+            y = data['phns']
     else:
         for i in xrange(len(wav_files)):
             mfccs, phns = get_mfccs_and_phones(wav_files[i], hp.Default.sr)
             x.append(mfccs)
             y.append(phns)
             print("File {}".format(i))
-        with open(hp.Test1.mfccs_file_path, 'wb') as fp:
-            pickle.dump(x, fp)
-        with open(hp.Test1.phns_file_path, 'wb') as fp2:
-            pickle.dump(y, fp2)
+        with open(hp.Test1.npz_file_path, 'wb') as fp:
+            np.savez_compressed(fp, mfccs=x, phns=y)
+
     print("Loaded mfccs and phns from TEST data")
-    idx = np.arange(0, len(x))
-    np.random.shuffle(idx)
-    idx = idx[:TEST_CAP]
-    x_shuffle = [x[i] for i in idx]
-    y_shuffle = [y[i] for i in idx]
-    return np.array(x_shuffle), np.array(y_shuffle)
+
+    # # Shuffle
+    # idx = np.arange(0, len(x))
+    # np.random.shuffle(idx)
+    # idx = idx[:TEST_CAP]
+    # x_shuffle = [x[i] for i in idx]
+    # y_shuffle = [y[i] for i in idx]
+    return np.asarray(x), np.asarray(y)
+
+
+def sample_data(mfccs_array, phns_array):
+
+    length = int(hp.Default.duration / hp.Default.frame_shift + 1)
+
+    for i in range(len(mfccs_array)):
+        mfccs = mfccs_array[i]
+        phns = phns_array[i]
+        # Random crop
+        start = np.random.choice(
+            range(np.maximum(1, len(mfccs) - length)), 1)[0]
+        end = start + length
+        mfccs = mfccs[start:end]
+        phns = phns[start:end]
+        assert (len(mfccs) == len(phns))
+
+        # Padding or crop
+        mfccs = librosa.util.fix_length(mfccs, length, axis=0)
+        phns = librosa.util.fix_length(phns, length, axis=0)
+
+        mfccs_array[i], phns_array[i] = mfccs, phns
+    return np.asarray(mfccs_array), np.asarray(phns_array)
 
 
 def get_arguments():
@@ -310,6 +331,13 @@ def set_parameters(nh, nl, epochs, batch_size):
 
 
 def train():
+
+    # Load Train data completely (All 4620 samples, unpadded, uncropped)
+    all_train_inputs, all_train_targets = load_train_data()
+
+    # Load Test data completely (All 1680 samples, unpadded, uncropped)
+    all_test_inputs, all_test_targets = load_test_data()
+
     graph = tf.Graph()
     with graph.as_default():
         # Input placeholder of shape [BATCH_SIZE, num_frames, num_mfcc_features]
@@ -336,8 +364,9 @@ def train():
         # RNN has NUM_HIDDEN output nodes
         # outputs has shape [BATCH_SIZE, num_frames, NUM_HIDDEN]
         # The second output is the last state and we will not use that
-        outputs, _ = tf.nn.dynamic_rnn(
-            stack, inputs, seq_len, dtype=tf.float32)
+        (output_fw, output_bw), _ = tf.nn.bidirectional_dynamic_rnn(
+            stack, stack, inputs, seq_len, dtype=tf.float32)
+        outputs = tf.concat([output_fw, output_bw], axis=2)
 
         # Save input shape for restoring later
         shape = tf.shape(inputs)
@@ -346,12 +375,12 @@ def train():
         # Reshaping to apply the same weights over the timesteps
         # outputs is now of shape [BATCH_SIZE*num_frames, NUM_HIDDEN]
         # So the same weights are trained for each timestep of each sequence
-        outputs = tf.reshape(outputs, [-1, NUM_HIDDEN])
+        outputs = tf.reshape(outputs, [-1, 2 * NUM_HIDDEN])
 
         # Truncated normal with mean 0 and stdev=0.1
         # Tip: Try another initialization
         # see https://www.tensorflow.org/versions/r0.9/api_docs/python/contrib.layers.html#initializers
-        W = tf.Variable(tf.truncated_normal([NUM_HIDDEN,
+        W = tf.Variable(tf.truncated_normal([2 * NUM_HIDDEN,
                                              num_classes],
                                             stddev=0.1))
         # Zero initialization
@@ -402,8 +431,11 @@ def train():
             train_cost = train_ler = 0
             start = time.time()
 
-            if ((epoch - 1) % SHUFFLE_PER_EPOCHS == 0):
-                train_inputs, train_targets = load_train_data()
+            if (epoch % RESAMPLE_PER_EPOCHS == 0 or epoch == 1):
+                train_inputs, train_targets = sample_data(
+                    all_train_inputs, all_train_targets)
+                train_targets = np.array(list(train_targets))
+                train_inputs = np.array(list(train_inputs))
 
                 train_targets = train_targets.astype(int)
                 train_inputs = (train_inputs - np.mean(train_inputs)) / \
@@ -411,11 +443,16 @@ def train():
 
                 num_examples = len(train_targets)
 
-                test_inputs, test_targets = load_test_data()
+                test_inputs, test_targets = sample_data(
+                    all_test_inputs, all_test_targets)
+
+                test_targets = np.array(list(test_targets))
+                test_inputs = np.array(list(test_inputs))
 
                 test_targets = test_targets.astype(int)
                 test_inputs = (test_inputs - np.mean(test_inputs)) / \
                     np.std(test_inputs)
+                print("Re-sampled data (2sec of every wav)")
 
             for batch in range(int(num_examples / BATCH_SIZE)):
 
@@ -445,7 +482,7 @@ def train():
                     seq_len: batch_seq_len})
 
                 batch_x, batch_y, batch_seq_len = next_batch(
-                    TEST_CAP, train_inputs, train_targets)
+                    TEST_CAP, test_inputs, test_targets)
 
                 test_acc = sess.run(accuracy, feed_dict={
                     inputs: batch_x,
@@ -472,10 +509,18 @@ def train():
 
 if __name__ == '__main__':
     args = get_arguments()
-    params_arr = [{'nh': 150, 'nl': 3, 'epochs': 1000, 'batch_size': 100},
-                  {'nh': 150, 'nl': 4, 'epochs': 1000, 'batch_size': 100},
-                  {'nh': 200, 'nl': 3, 'epochs': 1000, 'batch_size': 100},
-                  {'nh': 200, 'nl': 4, 'epochs': 1000, 'batch_size': 100}]
+    params_arr = [{'nh': 50, 'nl': 1, 'epochs': 300, 'batch_size': 100},
+                  {'nh': 75, 'nl': 1, 'epochs': 300, 'batch_size': 100},
+                  {'nh': 100, 'nl': 1, 'epochs': 300, 'batch_size': 100},
+                  {'nh': 50, 'nl': 2, 'epochs': 300, 'batch_size': 100},
+                  {'nh': 75, 'nl': 2, 'epochs': 300, 'batch_size': 100},
+                  {'nh': 100, 'nl': 2, 'epochs': 300, 'batch_size': 100},
+                  {'nh': 50, 'nl': 3, 'epochs': 300, 'batch_size': 100},
+                  {'nh': 75, 'nl': 3, 'epochs': 300, 'batch_size': 100},
+                  {'nh': 100, 'nl': 3, 'epochs': 300, 'batch_size': 100},
+                  {'nh': 50, 'nl': 4, 'epochs': 300, 'batch_size': 100},
+                  {'nh': 75, 'nl': 4, 'epochs': 300, 'batch_size': 100},
+                  {'nh': 100, 'nl': 4, 'epochs': 300, 'batch_size': 100}]
     for params in params_arr:
         set_parameters(**params)
         train()
