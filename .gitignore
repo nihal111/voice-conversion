@@ -1,8 +1,5 @@
 datasets/*
 *.pyc
 logdir/*
-mfccs_file_train
-phns_file_train
-mfccs_file_test
-phns_file_test
+*.npz
 .fuse*
