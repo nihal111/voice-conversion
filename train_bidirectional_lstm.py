@@ -35,7 +35,7 @@ BATCH_SIZE = 100
 SAVE_DIR = "./checkpoint/save"
 PLOTTING = True
 
-SAVE_PER_EPOCHS = 10
+SAVE_PER_EPOCHS = 1
 SHUFFLE_PER_EPOCHS = 20
 
 
@@ -78,7 +78,7 @@ def plot_graph(train_accuracy, test_accuracy):
 
 
 def save_plot():
-    plt.savefig('./images/{}_{}_{}_{}.png'.format(
+    plt.savefig('./images/bilstm_{}_{}_{}_{}.png'.format(
         NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE),
         bbox_inches='tight')
 
@@ -384,7 +384,7 @@ def train():
 
     with tf.Session(graph=graph) as sess:
         saver = tf.train.Saver()
-        SAVE_PATH = SAVE_DIR + '_{}_{}_{}_{}/model.ckpt'.format(
+        SAVE_PATH = SAVE_DIR + 'bilstm_{}_{}_{}_{}/model.ckpt'.format(
             NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE)
         try:
             saver.restore(sess, SAVE_PATH)

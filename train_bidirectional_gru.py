@@ -35,7 +35,7 @@ BATCH_SIZE = 100
 SAVE_DIR = "./checkpoint/save"
 PLOTTING = True
 
-SAVE_PER_EPOCHS = 10
+SAVE_PER_EPOCHS = 1
 SHUFFLE_PER_EPOCHS = 20
 
 
@@ -323,7 +323,7 @@ def train():
 
         # Get a basic LSTM cell with dropout for use in RNN
         def get_a_cell(lstm_size, keep_prob=1.0):
-            lstm = tf.nn.rnn_cell.BasicLSTMCell(lstm_size)
+            lstm = tf.nn.rnn_cell.GRUCell(lstm_size)
             drop = tf.nn.rnn_cell.DropoutWrapper(
                 lstm, output_keep_prob=keep_prob)
             return drop
