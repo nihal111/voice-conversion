@@ -26,8 +26,7 @@ class Default:
 class Train1:
     # path
     data_path = '{}/timit/TIMIT/TRAIN/*/*/*.WAV'.format(data_path_base)
-    mfccs_file_path = 'mfccs_file_train'
-    phns_file_path = 'phns_file_train'
+    npz_file_path = 'TIMIT_train_files.npz'
 
     # model
     hidden_units = 256  # alias = E
@@ -74,8 +73,7 @@ class Test1:
     # test
     batch_size = 32
 
-    mfccs_file_path = 'mfccs_file_test'
-    phns_file_path = 'phns_file_test'
+    npz_file_path = 'TIMIT_test_files.npz'
 
 
 class Test2:
