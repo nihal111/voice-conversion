@@ -46,8 +46,10 @@ class Train1:
 
 class Train2:
     # path
-    data_path = '{}/kate/sense_and_sensibility_split/*.wav'.format(
+    data_path = '{}/arctic/*/*.wav'.format(
         data_path_base)
+    mfccs_file_path = 'mfccs2_file_train'
+    phns_file_path = 'phns2_file_train'
     # data_path = '{}/arctic/slt/*.wav'.format(data_path_base)
 
     # model
@@ -83,8 +85,9 @@ class Test2:
 
 class Convert:
     # path
-    data_path = '{}/arctic/bdl/*.wav'.format(data_path_base)
-
+    data_path = '{}/arctic/*/*.wav'.format(data_path_base)
+    mfccs_file_path = 'mfccs2_file_train'
+    phns_file_path = 'phns2_file_train'
     # convert
     batch_size = 2
     emphasis_magnitude = 1.2
