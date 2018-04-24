@@ -45,10 +45,9 @@ class Train1:
 
 class Train2:
     # path
-    data_path = '{}/arctic/*/*.wav'.format(
+    data_path = '{}/arctic/bdl/a*.wav'.format(
         data_path_base)
-    mfccs_file_path = 'mfccs2_file_train'
-    phns_file_path = 'phns2_file_train'
+    npz_file_path = 'arctic_train_files.npz'
     # data_path = '{}/arctic/slt/*.wav'.format(data_path_base)
 
     # model
@@ -78,14 +77,13 @@ class Test1:
 
 class Test2:
     # test
+    data_path = '{}/arctic/bdl/b*.wav'.format(data_path_base)
+    npz_file_path = 'arctic_test_files.npz'
     batch_size = 32
 
 
 class Convert:
     # path
-    data_path = '{}/arctic/*/*.wav'.format(data_path_base)
-    mfccs_file_path = 'mfccs2_file_train'
-    phns_file_path = 'phns2_file_train'
     # convert
     batch_size = 2
     emphasis_magnitude = 1.2

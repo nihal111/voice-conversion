@@ -349,11 +349,11 @@ def train():
         # List of sequence lengths (num_frames)
         seq_len = tf.placeholder(tf.int32, [None])
 
-        # Get a basic LSTM cell with dropout for use in RNN
-        def get_a_cell(lstm_size, keep_prob=1.0):
-            lstm = tf.nn.rnn_cell.BasicLSTMCell(lstm_size)
+        # Get a GRU cell with dropout for use in RNN
+        def get_a_cell(gru_size, keep_prob=1.0):
+            gru = tf.nn.rnn_cell.GRUCell(gru_size)
             drop = tf.nn.rnn_cell.DropoutWrapper(
-                lstm, output_keep_prob=keep_prob)
+                gru, output_keep_prob=keep_prob)
             return drop
 
         # Make a multi layer RNN of NUM_LAYERS layers of cells
