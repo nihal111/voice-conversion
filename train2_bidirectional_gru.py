@@ -35,7 +35,7 @@ SAVE_DIR = "./checkpoint2/save"
 PLOTTING = True
 
 SAVE_PER_EPOCHS = 1
-RESAMPLE_PER_EPOCHS = 1
+RESAMPLE_PER_EPOCHS = 10
 
 
 def initialise_plot():
@@ -51,7 +51,7 @@ def initialise_plot():
 def annotate_max(x, y, ax=None):
     xmin = (x[np.argmin(y)] + 1) * SAVE_PER_EPOCHS
     ymin = y.min()
-    text = "Min Error\nEpoch={}, Accuracy={:.3f}".format(xmin, ymin)
+    text = "Min Error\nEpoch={}\nMSE={:.3f}".format(xmin, ymin)
     if not ax:
         ax = plt.gca()
     bbox_props = dict(boxstyle="square,pad=0.3", fc="w", ec="k", lw=0.72)
@@ -168,16 +168,19 @@ def get_mfccs_and_phones(wav_file, sr, trim=False, random_crop=False, length=int
     num_timesteps = mfccs.shape[0]
 
     # phones (targets)
-    phn_file = wav_file.replace("WAV.wav", "LAB").replace("WAV", "LAB").replace("wav","lab")
+    phn_file = wav_file.replace("wav", "lab")
     phn2idx, idx2phn = load_vocab()
     phns = np.zeros(shape=(num_timesteps,))
     bnd_list = []
     for line in open(phn_file, 'r').read().splitlines():
-        if(line!="#"):
+        if(line != "#"):
             start_time, _, phn = line.split()
-            bnd = int(float(start_time)*sr // hp.Default.hop_length)
+            bnd = int(float(start_time) * sr // hp.Default.hop_length)
             phns[bnd:] = phn2idx[phn]
             bnd_list.append(bnd)
+
+    # Replace pau with h# for consistency with TIMIT
+    phns[phns == 44.] = 0.
 
     # Trim
     if trim:
@@ -394,12 +397,11 @@ def train():
         # Reshaping back to the original shape
         predictions = tf.reshape(predictions, [batch_s, -1, num_features])
 
-        # Time major
-        # logits = tf.transpose(logits, (1, 0, 2))
-
-        mse_loss = tf.reduce_mean(
-            tf.losses.mean_squared_error(
-                predictions=predictions, labels=targets))
+        # mse_loss = tf.reduce_mean(
+        #     tf.losses.mean_squared_error(
+        #         predictions=predictions, labels=targets))
+        # define an accuracy assessment operation
+        mse_loss = tf.losses.mean_squared_error(predictions, targets)
 
         optimizer = tf.train.AdamOptimizer(
             LEARNING_RATE).minimize(mse_loss)
@@ -419,17 +421,17 @@ def train():
             sess.run(init_op)
             print("Model initialised.\n")
 
-        train_mse = []
-        test_mse = []
+        train_errors = []
+        test_errors = []
         if PLOTTING:
             initialise_plot()
 
         for epoch in range(1, NUM_EPOCHS + 1):
-            train_cost = train_ler = 0
+            train_cost = 0
             start = time.time()
 
             if (epoch % RESAMPLE_PER_EPOCHS == 0 or epoch == 1):
-                #sample_data returns mfccs,phns
+                # sample_data returns mfccs,phns
                 train_targets, train_inputs = sample_data(
                     all_train_targets, all_train_inputs)
                 train_targets = np.array(list(train_targets))
@@ -464,6 +466,7 @@ def train():
                 batch_cost, _ = sess.run([mse_loss, optimizer], feed)
                 train_cost += batch_cost * BATCH_SIZE
 
+            train_cost /= num_examples
             print("Epoch {}/{}, train_cost = {:.3f}, time = {:.3f}".format(
                 epoch, NUM_EPOCHS, train_cost, time.time() - start))
 
@@ -474,7 +477,7 @@ def train():
                 batch_x, batch_y, batch_seq_len = next_batch(
                     TRAIN_CAP, train_inputs, train_targets)
 
-                train_error = sess.run([mse_loss, optimizer], feed_dict={
+                train_err = sess.run(mse_loss, feed_dict={
                     inputs: batch_x,
                     targets: batch_y,
                     seq_len: batch_seq_len})
@@ -482,22 +485,21 @@ def train():
                 batch_x, batch_y, batch_seq_len = next_batch(
                     TEST_CAP, test_inputs, test_targets)
 
-                test_error = sess.run([mse_loss,optimizer], feed_dict={
+                test_err = sess.run(mse_loss, feed_dict={
                     inputs: batch_x,
                     targets: batch_y,
                     seq_len: batch_seq_len})
 
-                train_cost /= num_examples
-                train_error /= num_examples
-                test_error /= num_examples
-
                 log = "\nEpoch {}/{}, train_error = {:.3f}, " + \
                     "test_error = {:.3f} time = {:.3f}\n"
-                print(log.format(epoch, NUM_EPOCHS, train_error, 
-                                 test_error, time.time() - start))
+                print(log.format(epoch, NUM_EPOCHS, train_err,
+                                 test_err, time.time() - start))
+
+                train_errors.append(train_err)
+                test_errors.append(test_err)
 
                 if PLOTTING:
-                    plot_graph(train_error, test_error)
+                    plot_graph(train_errors, test_errors)
 
         if PLOTTING:
             save_plot()
@@ -505,18 +507,7 @@ def train():
 
 if __name__ == '__main__':
     args = get_arguments()
-    params_arr = [{'nh': 50, 'nl': 1, 'epochs': 3, 'batch_size': 1}]
-                  #{'nh': 75, 'nl': 1, 'epochs': 300, 'batch_size': 100},
-                  #{'nh': 100, 'nl': 1, 'epochs': 300, 'batch_size': 100},
-                  #{'nh': 50, 'nl': 2, 'epochs': 300, 'batch_size': 100},
-                  #{'nh': 75, 'nl': 2, 'epochs': 300, 'batch_size': 100},
-                  #{'nh': 100, 'nl': 2, 'epochs': 300, 'batch_size': 100},
-                  #{'nh': 50, 'nl': 3, 'epochs': 300, 'batch_size': 100},
-                  #{'nh': 75, 'nl': 3, 'epochs': 300, 'batch_size': 100},
-                  #{'nh': 100, 'nl': 3, 'epochs': 300, 'batch_size': 100},
-                  #{'nh': 50, 'nl': 4, 'epochs': 300, 'batch_size': 100},
-                  #{'nh': 75, 'nl': 4, 'epochs': 300, 'batch_size': 100},
-                  #{'nh': 100, 'nl': 4, 'epochs': 300, 'batch_size': 100}]
+    params_arr = [{'nh': 100, 'nl': 3, 'epochs': 50, 'batch_size': 100}]
     for params in params_arr:
         set_parameters(**params)
         train()

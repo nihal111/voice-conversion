@@ -428,7 +428,7 @@ def train():
             initialise_plot()
 
         for epoch in range(1, NUM_EPOCHS + 1):
-            train_cost = train_ler = 0
+            train_cost = 0
             start = time.time()
 
             if (epoch % RESAMPLE_PER_EPOCHS == 0 or epoch == 1):
@@ -466,6 +466,7 @@ def train():
                 batch_cost, _ = sess.run([cross_entropy, optimizer], feed)
                 train_cost += batch_cost * BATCH_SIZE
 
+            train_cost /= num_examples
             print("Epoch {}/{}, train_cost = {:.3f}, time = {:.3f}".format(
                 epoch, NUM_EPOCHS, train_cost, time.time() - start))
 
@@ -488,9 +489,6 @@ def train():
                     inputs: batch_x,
                     targets: batch_y,
                     seq_len: batch_seq_len})
-
-                train_cost /= num_examples
-                train_ler /= num_examples
 
                 log = "\nEpoch {}/{}, train_cost = {:.3f}, " + \
                     "train_acc = {:.3f}, test_acc = {:.3f} time = {:.3f}\n"
