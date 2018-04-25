@@ -26,16 +26,16 @@ num_features = 40
 TRAIN_CAP = 1000
 TEST_CAP = 500
 NUM_LAYERS = 3
-NUM_HIDDEN = 100
+NUM_HIDDEN = 3
 LEARNING_RATE = 0.01
-NUM_EPOCHS = 40
-BATCH_SIZE = 100
+NUM_EPOCHS = 3
+BATCH_SIZE = 5
 
-SAVE_DIR = "./checkpoint/save"
+SAVE_DIR = "./checkpoint2/save"
 PLOTTING = True
 
 SAVE_PER_EPOCHS = 1
-RESAMPLE_PER_EPOCHS = 20
+RESAMPLE_PER_EPOCHS = 1
 
 
 def initialise_plot():
@@ -45,13 +45,13 @@ def initialise_plot():
     plt.title('NH={} NL={} LR={} BS={}'.format(
         NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE))
     plt.xlabel('Epoch')
-    plt.ylabel('Accuracy')
+    plt.ylabel('Mean Square Error')
 
 
 def annotate_max(x, y, ax=None):
-    xmax = (x[np.argmax(y)] + 1) * SAVE_PER_EPOCHS
-    ymax = y.max()
-    text = "Max accuracy\nEpoch={}, Accuracy={:.3f}".format(xmax, ymax)
+    xmin = (x[np.argmin(y)] + 1) * SAVE_PER_EPOCHS
+    ymin = y.min()
+    text = "Min Error\nEpoch={}, Accuracy={:.3f}".format(xmin, ymin)
     if not ax:
         ax = plt.gca()
     bbox_props = dict(boxstyle="square,pad=0.3", fc="w", ec="k", lw=0.72)
@@ -77,7 +77,7 @@ def plot_graph(train_accuracy, test_accuracy):
 
 
 def save_plot():
-    plt.savefig('./images/{}_{}_{}_{}.png'.format(
+    plt.savefig('./images2/{}_{}_{}_{}.png'.format(
         NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE),
         bbox_inches='tight')
 
@@ -168,15 +168,16 @@ def get_mfccs_and_phones(wav_file, sr, trim=False, random_crop=False, length=int
     num_timesteps = mfccs.shape[0]
 
     # phones (targets)
-    phn_file = wav_file.replace("WAV.wav", "PHN").replace("WAV", "PHN")
+    phn_file = wav_file.replace("WAV.wav", "LAB").replace("WAV", "LAB").replace("wav","lab")
     phn2idx, idx2phn = load_vocab()
     phns = np.zeros(shape=(num_timesteps,))
     bnd_list = []
     for line in open(phn_file, 'r').read().splitlines():
-        start_point, _, phn = line.split()
-        bnd = int(start_point) // hp.Default.hop_length
-        phns[bnd:] = phn2idx[phn]
-        bnd_list.append(bnd)
+        if(line!="#"):
+            start_time, _, phn = line.split()
+            bnd = int(float(start_time)*sr // hp.Default.hop_length)
+            phns[bnd:] = phn2idx[phn]
+            bnd_list.append(bnd)
 
     # Trim
     if trim:
@@ -201,11 +202,11 @@ def get_mfccs_and_phones(wav_file, sr, trim=False, random_crop=False, length=int
 
 
 def load_train_data():
-    wav_files = sorted(glob.glob(hp.Train1.data_path))
+    wav_files = sorted(glob.glob(hp.Train2.data_path))
     x = []
     y = []
-    if os.path.isfile(hp.Train1.npz_file_path):
-        with np.load(hp.Train1.npz_file_path) as data:
+    if os.path.isfile(hp.Train2.npz_file_path):
+        with np.load(hp.Train2.npz_file_path) as data:
             x = data['mfccs']
             y = data['phns']
     else:
@@ -214,7 +215,7 @@ def load_train_data():
             x.append(mfccs)
             y.append(phns)
             print("File {}".format(i))
-        with open(hp.Train1.npz_file_path, 'wb') as fp:
+        with open(hp.Train2.npz_file_path, 'wb') as fp:
             np.savez_compressed(fp, mfccs=x, phns=y)
 
     print("Loaded mfccs and phns from TRAIN data")
@@ -229,11 +230,11 @@ def load_train_data():
 
 
 def load_test_data():
-    wav_files = sorted(glob.glob(hp.Test1.data_path))
+    wav_files = sorted(glob.glob(hp.Test2.data_path))
     x = []
     y = []
-    if os.path.isfile(hp.Test1.npz_file_path):
-        with np.load(hp.Test1.npz_file_path) as data:
+    if os.path.isfile(hp.Test2.npz_file_path):
+        with np.load(hp.Test2.npz_file_path) as data:
             x = data['mfccs']
             y = data['phns']
     else:
@@ -242,7 +243,7 @@ def load_test_data():
             x.append(mfccs)
             y.append(phns)
             print("File {}".format(i))
-        with open(hp.Test1.npz_file_path, 'wb') as fp:
+        with open(hp.Test2.npz_file_path, 'wb') as fp:
             np.savez_compressed(fp, mfccs=x, phns=y)
 
     print("Loaded mfccs and phns from TEST data")
@@ -303,17 +304,18 @@ def get_arguments():
     return arguments
 
 
-def next_batch(num, data, labels):
+def next_batch(num, inputs, outputs):
     '''
     Return a total of `num` random samples and labels.
+    inputs is phns and outputs is mfccs
     '''
-    idx = np.arange(0, len(data))
+    idx = np.arange(0, len(inputs))
     np.random.shuffle(idx)
     idx = idx[:num]
-    data_shuffle = [data[i] for i in idx]
-    labels_shuffle = np.asarray([one_hot(labels[i]) for i in idx])
-    train_seq_len = [len(x) for x in data_shuffle]
-    return data_shuffle, labels_shuffle, train_seq_len
+    outputs_shuffle = [outputs[i] for i in idx]
+    inputs_shuffle = np.asarray([one_hot(inputs[i]) for i in idx])
+    train_seq_len = [len(x) for x in inputs_shuffle]
+    return inputs_shuffle, outputs_shuffle, train_seq_len
 
 
 def one_hot(indices, depth=num_classes):
@@ -333,27 +335,27 @@ def set_parameters(nh, nl, epochs, batch_size):
 def train():
 
     # Load Train data completely (All 4620 samples, unpadded, uncropped)
-    all_train_inputs, all_train_targets = load_train_data()
+    all_train_targets, all_train_inputs = load_train_data()
 
     # Load Test data completely (All 1680 samples, unpadded, uncropped)
-    all_test_inputs, all_test_targets = load_test_data()
+    all_test_targets, all_test_inputs = load_test_data()
 
     graph = tf.Graph()
     with graph.as_default():
-        # Input placeholder of shape [BATCH_SIZE, num_frames, num_mfcc_features]
-        inputs = tf.placeholder(tf.float32, [None, None, num_features])
+        # Input placeholder of shape [BATCH_SIZE, num_frames, num_phn_classes]
+        inputs = tf.placeholder(tf.float32, [None, None, num_classes])
 
-        # Target placeholder of shape [BATCH_SIZE, num_frames, num_phn_classes]
-        targets = tf.placeholder(tf.int32, [None, None, num_classes])
+        # Target placeholder of shape [BATCH_SIZE, num_frames, num__mfcc_features]
+        targets = tf.placeholder(tf.int32, [None, None, num_features])
 
         # List of sequence lengths (num_frames)
         seq_len = tf.placeholder(tf.int32, [None])
 
-        # Get a basic LSTM cell with dropout for use in RNN
-        def get_a_cell(lstm_size, keep_prob=1.0):
-            lstm = tf.nn.rnn_cell.BasicLSTMCell(lstm_size)
+        # Get a GRU cell with dropout for use in RNN
+        def get_a_cell(gru_size, keep_prob=1.0):
+            gru = tf.nn.rnn_cell.GRUCell(gru_size)
             drop = tf.nn.rnn_cell.DropoutWrapper(
-                lstm, output_keep_prob=keep_prob)
+                gru, output_keep_prob=keep_prob)
             return drop
 
         # Make a multi layer RNN of NUM_LAYERS layers of cells
@@ -381,31 +383,26 @@ def train():
         # Tip: Try another initialization
         # see https://www.tensorflow.org/versions/r0.9/api_docs/python/contrib.layers.html#initializers
         W = tf.Variable(tf.truncated_normal([2 * NUM_HIDDEN,
-                                             num_classes],
+                                             num_features],
                                             stddev=0.1))
         # Zero initialization
-        b = tf.Variable(tf.constant(0., shape=[num_classes]))
+        b = tf.Variable(tf.constant(0., shape=[num_features]))
 
         # Doing the affine projection
-        logits = tf.matmul(outputs, W) + b
+        predictions = tf.matmul(outputs, W) + b
 
         # Reshaping back to the original shape
-        logits = tf.reshape(logits, [batch_s, -1, num_classes])
+        predictions = tf.reshape(predictions, [batch_s, -1, num_features])
 
         # Time major
         # logits = tf.transpose(logits, (1, 0, 2))
 
-        cross_entropy = tf.reduce_mean(
-            tf.nn.softmax_cross_entropy_with_logits_v2(
-                logits=logits, labels=targets))
+        mse_loss = tf.reduce_mean(
+            tf.losses.mean_squared_error(
+                predictions=predictions, labels=targets))
 
         optimizer = tf.train.AdamOptimizer(
-            LEARNING_RATE).minimize(cross_entropy)
-
-        # define an accuracy assessment operation
-        correct_prediction = tf.equal(
-            tf.argmax(logits, 2), tf.argmax(targets, 2))
-        accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+            LEARNING_RATE).minimize(mse_loss)
 
         # finally setup the initialisation operator
         init_op = tf.global_variables_initializer()
@@ -422,8 +419,8 @@ def train():
             sess.run(init_op)
             print("Model initialised.\n")
 
-        train_accuracy = []
-        test_accuracy = []
+        train_mse = []
+        test_mse = []
         if PLOTTING:
             initialise_plot()
 
@@ -432,26 +429,27 @@ def train():
             start = time.time()
 
             if (epoch % RESAMPLE_PER_EPOCHS == 0 or epoch == 1):
-                train_inputs, train_targets = sample_data(
-                    all_train_inputs, all_train_targets)
+                #sample_data returns mfccs,phns
+                train_targets, train_inputs = sample_data(
+                    all_train_targets, all_train_inputs)
                 train_targets = np.array(list(train_targets))
                 train_inputs = np.array(list(train_inputs))
 
-                train_targets = train_targets.astype(int)
-                train_inputs = (train_inputs - np.mean(train_inputs)) / \
-                    np.std(train_inputs)
+                train_inputs = train_inputs.astype(int)
+                train_targets = (train_targets - np.mean(train_targets)) / \
+                    np.std(train_targets)
 
-                num_examples = len(train_targets)
+                num_examples = len(train_inputs)
 
-                test_inputs, test_targets = sample_data(
-                    all_test_inputs, all_test_targets)
+                test_targets, test_inputs = sample_data(
+                    all_test_targets, all_test_inputs)
 
                 test_targets = np.array(list(test_targets))
                 test_inputs = np.array(list(test_inputs))
 
-                test_targets = test_targets.astype(int)
-                test_inputs = (test_inputs - np.mean(test_inputs)) / \
-                    np.std(test_inputs)
+                test_inputs = test_inputs.astype(int)
+                test_targets = (test_targets - np.mean(test_targets)) / \
+                    np.std(test_targets)
                 print("Re-sampled data (2sec of every wav)")
 
             for batch in range(int(num_examples / BATCH_SIZE)):
@@ -463,7 +461,7 @@ def train():
                         targets: batch_y,
                         seq_len: batch_seq_len}
 
-                batch_cost, _ = sess.run([cross_entropy, optimizer], feed)
+                batch_cost, _ = sess.run([mse_loss, optimizer], feed)
                 train_cost += batch_cost * BATCH_SIZE
 
             print("Epoch {}/{}, train_cost = {:.3f}, time = {:.3f}".format(
@@ -476,7 +474,7 @@ def train():
                 batch_x, batch_y, batch_seq_len = next_batch(
                     TRAIN_CAP, train_inputs, train_targets)
 
-                train_acc = sess.run(accuracy, feed_dict={
+                train_error = sess.run([mse_loss, optimizer], feed_dict={
                     inputs: batch_x,
                     targets: batch_y,
                     seq_len: batch_seq_len})
@@ -484,24 +482,22 @@ def train():
                 batch_x, batch_y, batch_seq_len = next_batch(
                     TEST_CAP, test_inputs, test_targets)
 
-                test_acc = sess.run(accuracy, feed_dict={
+                test_error = sess.run([mse_loss,optimizer], feed_dict={
                     inputs: batch_x,
                     targets: batch_y,
                     seq_len: batch_seq_len})
 
                 train_cost /= num_examples
-                train_ler /= num_examples
+                train_error /= num_examples
+                test_error /= num_examples
 
-                log = "\nEpoch {}/{}, train_cost = {:.3f}, " + \
-                    "train_acc = {:.3f}, test_acc = {:.3f} time = {:.3f}\n"
-                print(log.format(epoch, NUM_EPOCHS, train_cost, train_acc,
-                                 test_acc, time.time() - start))
-
-                train_accuracy.append(train_acc)
-                test_accuracy.append(test_acc)
+                log = "\nEpoch {}/{}, train_error = {:.3f}, " + \
+                    "test_error = {:.3f} time = {:.3f}\n"
+                print(log.format(epoch, NUM_EPOCHS, train_error, 
+                                 test_error, time.time() - start))
 
                 if PLOTTING:
-                    plot_graph(train_accuracy, test_accuracy)
+                    plot_graph(train_error, test_error)
 
         if PLOTTING:
             save_plot()
@@ -509,10 +505,18 @@ def train():
 
 if __name__ == '__main__':
     args = get_arguments()
-    params_arr = [{'nh': 100, 'nl': 2, 'epochs': 50, 'batch_size': 100},
-                  {'nh': 75, 'nl': 3, 'epochs': 50, 'batch_size': 100},
-                  {'nh': 100, 'nl': 3, 'epochs': 50, 'batch_size': 100},
-                  {'nh': 75, 'nl': 4, 'epochs': 50, 'batch_size': 100}]
+    params_arr = [{'nh': 50, 'nl': 1, 'epochs': 3, 'batch_size': 1}]
+                  #{'nh': 75, 'nl': 1, 'epochs': 300, 'batch_size': 100},
+                  #{'nh': 100, 'nl': 1, 'epochs': 300, 'batch_size': 100},
+                  #{'nh': 50, 'nl': 2, 'epochs': 300, 'batch_size': 100},
+                  #{'nh': 75, 'nl': 2, 'epochs': 300, 'batch_size': 100},
+                  #{'nh': 100, 'nl': 2, 'epochs': 300, 'batch_size': 100},
+                  #{'nh': 50, 'nl': 3, 'epochs': 300, 'batch_size': 100},
+                  #{'nh': 75, 'nl': 3, 'epochs': 300, 'batch_size': 100},
+                  #{'nh': 100, 'nl': 3, 'epochs': 300, 'batch_size': 100},
+                  #{'nh': 50, 'nl': 4, 'epochs': 300, 'batch_size': 100},
+                  #{'nh': 75, 'nl': 4, 'epochs': 300, 'batch_size': 100},
+                  #{'nh': 100, 'nl': 4, 'epochs': 300, 'batch_size': 100}]
     for params in params_arr:
         set_parameters(**params)
         train()
