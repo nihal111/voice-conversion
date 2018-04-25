@@ -3,3 +3,4 @@ datasets/*
 logdir/*
 *.npz
 .fuse*
+test-recordings/*
