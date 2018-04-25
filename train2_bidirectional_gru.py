@@ -43,8 +43,8 @@ def initialise_plot():
     plt.ion()
     plt.show()
     plt.gcf().clear()
-    plt.title('NH={} NL={} LR={} BS={}'.format(
-        NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE))
+    plt.title('NH={} NL={} LR={} BS={} KP={}'.format(
+        NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE, KEEP_PROB))
     plt.xlabel('Epoch')
     plt.ylabel('Mean Square Error')
 
