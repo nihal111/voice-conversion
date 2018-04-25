@@ -327,7 +327,7 @@ def set_parameters(nh, nl, epochs, batch_size):
     NUM_HIDDEN = nh
     NUM_LAYERS = nl
     NUM_EPOCHS = epochs
-    BATCH_SIZE = BATCH_SIZE
+    BATCH_SIZE = batch_size
 
 
 def train():

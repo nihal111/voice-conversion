@@ -55,7 +55,7 @@ def annotate_max(x, y, ax=None):
     if not ax:
         ax = plt.gca()
     bbox_props = dict(boxstyle="square,pad=0.3", fc="w", ec="k", lw=0.72)
-    plt.annotate(text, xy=(0.75, 0.1),
+    plt.annotate(text, xy=(0.75, 0.75),
                  xycoords='axes fraction', bbox=bbox_props)
 
 
@@ -77,7 +77,7 @@ def plot_graph(train_accuracy, test_accuracy):
 
 
 def save_plot():
-    plt.savefig('./images2/{}_{}_{}_{}.png'.format(
+    plt.savefig('./images2/bigru_{}_{}_{}_{}.png'.format(
         NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE),
         bbox_inches='tight')
 
@@ -332,7 +332,7 @@ def set_parameters(nh, nl, epochs, batch_size):
     NUM_HIDDEN = nh
     NUM_LAYERS = nl
     NUM_EPOCHS = epochs
-    BATCH_SIZE = BATCH_SIZE
+    BATCH_SIZE = batch_size
 
 
 def train():
@@ -411,7 +411,7 @@ def train():
 
     with tf.Session(graph=graph) as sess:
         saver = tf.train.Saver()
-        SAVE_PATH = SAVE_DIR + '_{}_{}_{}_{}/model.ckpt'.format(
+        SAVE_PATH = SAVE_DIR + '_bigru_{}_{}_{}_{}/model.ckpt'.format(
             NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE)
         try:
             saver.restore(sess, SAVE_PATH)
@@ -507,7 +507,9 @@ def train():
 
 if __name__ == '__main__':
     args = get_arguments()
-    params_arr = [{'nh': 100, 'nl': 3, 'epochs': 50, 'batch_size': 100}]
+    params_arr = [{'nh': 50, 'nl': 3, 'epochs': 100, 'batch_size': 100},
+                  {'nh': 75, 'nl': 3, 'epochs': 100, 'batch_size': 100},
+                  {'nh': 100, 'nl': 3, 'epochs': 100, 'batch_size': 100}]
     for params in params_arr:
         set_parameters(**params)
         train()
