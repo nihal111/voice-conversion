@@ -25,12 +25,12 @@ num_features = 40
 # HYPER PARAMETERS
 TRAIN_CAP = 1000
 TEST_CAP = 500
-NUM_LAYERS = 3
-NUM_HIDDEN = 3
+NUM_LAYERS = 2
+NUM_HIDDEN = 100
 LEARNING_RATE = 0.01
-NUM_EPOCHS = 3
-BATCH_SIZE = 5
-KEEP_PROB = 1.0
+NUM_EPOCHS = 50
+BATCH_SIZE = 100
+KEEP_PROB = 0.9
 
 SAVE_DIR = "./checkpoint2/save"
 PLOTTING = True
@@ -342,6 +342,9 @@ def train():
     # Load Train data completely (All 4620 samples, unpadded, uncropped)
     all_train_targets, all_train_inputs = load_train_data()
 
+    train_mean = np.mean(np.concatenate(all_train_targets).ravel())
+    train_std_dev = np.std(np.concatenate(all_train_targets).ravel())
+
     # Load Test data completely (All 1680 samples, unpadded, uncropped)
     all_test_targets, all_test_inputs = load_test_data()
 
@@ -357,6 +360,10 @@ def train():
         seq_len = tf.placeholder(tf.int32, [None])
 
         keep_prob = tf.placeholder(tf.float32, shape=())
+
+        mean = tf.Variable(-3.643601, dtype=tf.float32)
+
+        std_dev = tf.Variable(2.283052, dtype=tf.float32)
 
         # Get a GRU cell with dropout for use in RNN
         def get_a_cell(gru_size, keep_prob=1.0):
@@ -400,6 +407,8 @@ def train():
 
         # Reshaping back to the original shape
         predictions = tf.reshape(predictions, [batch_s, -1, num_features])
+
+        scaled_predictions = predictions * std_dev + mean
 
         # mse_loss = tf.reduce_mean(
         #     tf.losses.mean_squared_error(

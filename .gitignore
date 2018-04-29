@@ -4,3 +4,9 @@ logdir/*
 *.npz
 .fuse*
 test-recordings/*
+checkpoint/*
+checkpoint2/*
+images/*
+images2/*
+*.WAV
+*.wav

@@ -523,7 +523,7 @@ def train():
 if __name__ == '__main__':
     args = get_arguments()
     params_arr = [
-        {'nh': 100, 'nl': 5, 'epochs': 100, 'batch_size': 20, 'keep_prob': 0.9}
+        {'nh': 100, 'nl': 1, 'epochs': 100, 'batch_size': 100, 'keep_prob': 0.9}
     ]
     for params in params_arr:
         set_parameters(**params)

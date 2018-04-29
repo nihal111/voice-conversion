@@ -40,7 +40,7 @@ RESAMPLE_PER_EPOCHS = 10
 
 
 def db_to_amplitude(x):
-    return 10.0**(x/10.0)
+    return 10.0**(x / 10.0)
 
 
 def preemphasis(x, coeff=0.97):
@@ -51,7 +51,7 @@ def preemphasis(x, coeff=0.97):
 
 
 def deemphasis(x, coeff=0.97):
-    return signal.lfilter([1], [1,-coeff], x)
+    return signal.lfilter([1], [1, -coeff], x)
 
 
 def load_vocab():
@@ -168,6 +168,7 @@ def get_mfccs_and_phones(wav_file, sr, trim=False, random_crop=False, length=int
     # phns = librosa.util.fix_length(phns, length, axis=0)
     return mfccs, phns
 
+
 def load_test_data(phn_file):
     phn2idx, idx2phn = load_vocab()
     phns = np.zeros(shape=(100000,))
@@ -177,7 +178,7 @@ def load_test_data(phn_file):
         bnd = int(start_point) // hp.Default.hop_length
         phns[bnd:] = phn2idx[phn]
         bnd_list.append(bnd)
-    phns = phns[:int(end_point)]
+    phns = phns[:(int(end_point) // hp.Default.hop_length)]
     return np.array([phns])
 
 
@@ -205,6 +206,7 @@ def get_arguments():
         BATCH_SIZE = arguments.batch_size
     return arguments
 
+
 def one_hot(indices, depth=num_classes):
     one_hot_labels = np.zeros((len(indices), depth))
     one_hot_labels[np.arange(len(indices)), indices] = 1
@@ -226,9 +228,11 @@ def spectrogram2wav(mag, n_fft, win_length, hop_length, num_iters, phase_angle=N
         phase_angle = np.pi * np.random.rand(*mag.shape)
     spec = mag * np.exp(1.j * phase_angle)
     for i in range(num_iters):
-        wav = librosa.istft(spec, win_length=win_length, hop_length=hop_length, length=length)
+        wav = librosa.istft(spec, win_length=win_length,
+                            hop_length=hop_length, length=length)
         if i != num_iters - 1:
-            spec = librosa.stft(wav, n_fft=n_fft, win_length=win_length, hop_length=hop_length)
+            spec = librosa.stft(
+                wav, n_fft=n_fft, win_length=win_length, hop_length=hop_length)
             _, phase = librosa.magphase(spec)
             phase_angle = np.angle(phase)
             spec = mag * np.exp(1.j * phase_angle)
@@ -237,16 +241,19 @@ def spectrogram2wav(mag, n_fft, win_length, hop_length, num_iters, phase_angle=N
 
 def _get_wav_from_mfccs(mfccs, preemphasis_coeff, n_fft, win_length, hop_length, n_wav):
     dctm = librosa.filters.dct(hp.Default.n_mfcc, hp.Default.n_mels)
-    mel_basis = librosa.filters.mel(hp.Default.sr, hp.Default.n_fft, hp.Default.n_mels)
-    bin_scaling = 1.0/np.maximum(0.0005, np.sum(np.dot(mel_basis.T, mel_basis),axis=0))
-    mel_db = np.dot(dctm.T,mfccs.T)
+    mel_basis = librosa.filters.mel(
+        hp.Default.sr, hp.Default.n_fft, hp.Default.n_mels)
+    bin_scaling = 1.0 / \
+        np.maximum(0.0005, np.sum(np.dot(mel_basis.T, mel_basis), axis=0))
+    mel_db = np.dot(dctm.T, mfccs.T)
     mel = db_to_amplitude(mel_db)
     recon_magsq = bin_scaling[:, np.newaxis] * np.dot(mel_basis.T, mel)
     mag = np.sqrt(recon_magsq)
     #excitation = np.random.randn(n_wav)
     #E = librosa.stft(excitation, n_fft=n_fft, hop_length=hop_length, win_length=win_length)
     #recon = librosa.core.istft(np.sqrt(recon_stft), hop_length=hop_length, win_length=win_length)
-    recon = spectrogram2wav(mag, n_fft, win_length, hop_length, hp.Default.n_iter)
+    recon = spectrogram2wav(mag, n_fft, win_length,
+                            hop_length, hp.Default.n_iter)
     recon = deemphasis(recon, coeff=preemphasis_coeff)
     return recon
 
@@ -254,7 +261,7 @@ def _get_wav_from_mfccs(mfccs, preemphasis_coeff, n_fft, win_length, hop_length,
 if __name__ == '__main__':
     args = get_arguments()
     predict_file = args.predict_file
-    
+
     graph = tf.Graph()
     with graph.as_default():
         # Input placeholder of shape [BATCH_SIZE, num_frames, num_phn_classes]
@@ -267,6 +274,10 @@ if __name__ == '__main__':
         seq_len = tf.placeholder(tf.int32, [None])
 
         keep_prob = tf.placeholder(tf.float32, shape=())
+
+        mean = tf.Variable(-3.643601, dtype=tf.float32)
+
+        std_dev = tf.Variable(2.283052, dtype=tf.float32)
 
         # Get a GRU cell with dropout for use in RNN
         def get_a_cell(gru_size, keep_prob=1.0):
@@ -311,6 +322,8 @@ if __name__ == '__main__':
         # Reshaping back to the original shape
         predictions = tf.reshape(predictions, [batch_s, -1, num_features])
 
+        scaled_predictions = predictions * std_dev + mean
+
         # mse_loss = tf.reduce_mean(
         #     tf.losses.mean_squared_error(
         #         predictions=predictions, labels=targets))
@@ -347,6 +360,16 @@ if __name__ == '__main__':
                 seq_len: predict_seq_len,
                 keep_prob: 1.0}
 
-        outputs = sess.run(predictions, feed)
-        print(predictions)
-        print(predictions.shape)
+        mfccs = sess.run(scaled_predictions, feed)[0]
+
+        print(mfccs)
+        print(mfccs.shape)
+
+        audio = _get_wav_from_mfccs(mfccs,
+                                    hp.Default.preemphasis,
+                                    hp.Default.n_fft,
+                                    hp.Default.win_length,
+                                    hp.Default.hop_length,
+                                    (len(mfccs) - 1) * hp.Default.hop_length)
+        librosa.output.write_wav(
+            "SA1_pred.wav", audio, hp.Default.sr, norm=True)
