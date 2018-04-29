@@ -51,7 +51,7 @@ def initialise_plot():
 def annotate_max(x, y, ax=None):
     xmax = (x[np.argmax(y)] + 1) * SAVE_PER_EPOCHS
     ymax = y.max()
-    text = "Max accuracy\nEpoch={}, Accuracy={:.3f}".format(xmax, ymax)
+    text = "Max accuracy\nEpoch={}\nAccuracy={:.3f}".format(xmax, ymax)
     if not ax:
         ax = plt.gca()
     bbox_props = dict(boxstyle="square,pad=0.3", fc="w", ec="k", lw=0.72)
@@ -335,6 +335,9 @@ def train():
     # Load Train data completely (All 4620 samples, unpadded, uncropped)
     all_train_inputs, all_train_targets = load_train_data()
 
+    train_mean = np.mean(np.concatenate(all_train_targets).ravel())
+    train_std_dev = np.std(np.concatenate(all_train_targets).ravel())
+
     # Load Test data completely (All 1680 samples, unpadded, uncropped)
     all_test_inputs, all_test_targets = load_test_data()
 
@@ -357,7 +360,10 @@ def train():
             return drop
 
         # Make a multi layer RNN of NUM_LAYERS layers of cells
-        stack = tf.nn.rnn_cell.MultiRNNCell(
+        stack_fw = tf.nn.rnn_cell.MultiRNNCell(
+            [get_a_cell(NUM_HIDDEN) for _ in range(NUM_LAYERS)])
+
+        stack_bw = tf.nn.rnn_cell.MultiRNNCell(
             [get_a_cell(NUM_HIDDEN) for _ in range(NUM_LAYERS)])
 
         # outputs is the output of the RNN at each time step (frame)
@@ -365,7 +371,7 @@ def train():
         # outputs has shape [BATCH_SIZE, num_frames, NUM_HIDDEN]
         # The second output is the last state and we will not use that
         (output_fw, output_bw), _ = tf.nn.bidirectional_dynamic_rnn(
-            stack, stack, inputs, seq_len, dtype=tf.float32)
+            stack_fw, stack_bw, inputs, seq_len, dtype=tf.float32)
         outputs = tf.concat([output_fw, output_bw], axis=2)
 
         # Save input shape for restoring later
@@ -438,8 +444,8 @@ def train():
                 train_inputs = np.array(list(train_inputs))
 
                 train_targets = train_targets.astype(int)
-                train_inputs = (train_inputs - np.mean(train_inputs)) / \
-                    np.std(train_inputs)
+                train_inputs = (train_inputs - train_mean) / \
+                    train_std_dev
 
                 num_examples = len(train_targets)
 
@@ -450,8 +456,8 @@ def train():
                 test_inputs = np.array(list(test_inputs))
 
                 test_targets = test_targets.astype(int)
-                test_inputs = (test_inputs - np.mean(test_inputs)) / \
-                    np.std(test_inputs)
+                test_inputs = (test_inputs - train_mean) / \
+                    train_std_dev
                 print("Re-sampled data (2sec of every wav)")
 
             for batch in range(int(num_examples / BATCH_SIZE)):
@@ -507,18 +513,7 @@ def train():
 
 if __name__ == '__main__':
     args = get_arguments()
-    params_arr = [{'nh': 50, 'nl': 1, 'epochs': 300, 'batch_size': 100},
-                  {'nh': 75, 'nl': 1, 'epochs': 300, 'batch_size': 100},
-                  {'nh': 100, 'nl': 1, 'epochs': 300, 'batch_size': 100},
-                  {'nh': 50, 'nl': 2, 'epochs': 300, 'batch_size': 100},
-                  {'nh': 75, 'nl': 2, 'epochs': 300, 'batch_size': 100},
-                  {'nh': 100, 'nl': 2, 'epochs': 300, 'batch_size': 100},
-                  {'nh': 50, 'nl': 3, 'epochs': 300, 'batch_size': 100},
-                  {'nh': 75, 'nl': 3, 'epochs': 300, 'batch_size': 100},
-                  {'nh': 100, 'nl': 3, 'epochs': 300, 'batch_size': 100},
-                  {'nh': 50, 'nl': 4, 'epochs': 300, 'batch_size': 100},
-                  {'nh': 75, 'nl': 4, 'epochs': 300, 'batch_size': 100},
-                  {'nh': 100, 'nl': 4, 'epochs': 300, 'batch_size': 100}]
+    params_arr = [{'nh': 100, 'nl': 4, 'epochs': 50, 'batch_size': 75}]
     for params in params_arr:
         set_parameters(**params)
         train()

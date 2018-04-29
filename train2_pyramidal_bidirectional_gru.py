@@ -34,7 +34,7 @@ BATCH_SIZE = 100
 KEEP_PROB = 0.9
 TRAIN_CAP = TEST_CAP = 100
 
-SAVE_DIR = "./checkpoint2/savepyramidal"
+SAVE_DIR = "./checkpoint2/save_pyramidal"
 PLOTTING = True
 
 SAVE_PER_EPOCHS = 1

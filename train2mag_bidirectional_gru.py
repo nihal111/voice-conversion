@@ -343,7 +343,6 @@ def train():
 
     # Load Train data completely (All 4620 samples, unpadded, uncropped)
     all_train_targets, all_train_inputs = load_train_data()
-    print(all_train_targets.shape)
 
     train_mean = np.mean(np.concatenate(all_train_targets).ravel())
     train_std_dev = np.std(np.concatenate(all_train_targets).ravel())

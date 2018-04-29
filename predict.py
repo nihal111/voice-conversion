@@ -30,8 +30,8 @@ TEST_CAP = 500
 num_layers = 4
 num_hidden = 100
 learning_rate = 0.01
-num_epochs = 40
-batch_size = 100
+num_epochs = 50
+batch_size = 75
 
 SAVE_DIR = "./checkpoint/save"
 PLOTTING = True
@@ -125,52 +125,53 @@ def one_hot(indices, depth=num_classes):
     return one_hot_labels
 
 
-if __name__ == '__main__':
-    args = get_arguments()
-    predict_file = args.predict_file
-
+def predict_phonemes():
     graph = tf.Graph()
     with graph.as_default():
-        # Input placeholder of shape [batch_size, num_frames, num_mfcc_features]
+        # Input placeholder of shape [BATCH_SIZE, num_frames, num_mfcc_features]
         inputs = tf.placeholder(tf.float32, [None, None, num_features])
 
-        # Target placeholder of shape [batch_size, num_frames, num_phn_classes]
+        # Target placeholder of shape [BATCH_SIZE, num_frames, num_phn_classes]
         targets = tf.placeholder(tf.int32, [None, None, num_classes])
 
         # List of sequence lengths (num_frames)
         seq_len = tf.placeholder(tf.int32, [None])
 
-        # Get a basic LSTM cell with dropout for use in RNN
-        def get_a_cell(lstm_size, keep_prob=1.0):
-            lstm = tf.nn.rnn_cell.BasicLSTMCell(lstm_size)
+        # Get a GRU cell with dropout for use in RNN
+        def get_a_cell(gru_size, keep_prob=1.0):
+            gru = tf.nn.rnn_cell.GRUCell(gru_size)
             drop = tf.nn.rnn_cell.DropoutWrapper(
-                lstm, output_keep_prob=keep_prob)
+                gru, output_keep_prob=keep_prob)
             return drop
 
-        # Make a multi layer RNN of num_layers layers of cells
-        stack = tf.nn.rnn_cell.MultiRNNCell(
-            [get_a_cell(num_hidden) for _ in range(num_layers)])
+        # Make a multi layer RNN of NUM_LAYERS layers of cells
+        stack_fw = tf.nn.rnn_cell.MultiRNNCell(
+            [get_a_cell(NUM_HIDDEN) for _ in range(NUM_LAYERS)])
+
+        stack_bw = tf.nn.rnn_cell.MultiRNNCell(
+            [get_a_cell(NUM_HIDDEN) for _ in range(NUM_LAYERS)])
 
         # outputs is the output of the RNN at each time step (frame)
-        # RNN has num_hidden output nodes
-        # outputs has shape [batch_size, num_frames, num_hidden]
+        # RNN has NUM_HIDDEN output nodes
+        # outputs has shape [BATCH_SIZE, num_frames, NUM_HIDDEN]
         # The second output is the last state and we will not use that
-        outputs, _ = tf.nn.dynamic_rnn(
-            stack, inputs, seq_len, dtype=tf.float32)
+        (output_fw, output_bw), _ = tf.nn.bidirectional_dynamic_rnn(
+            stack_fw, stack_bw, inputs, seq_len, dtype=tf.float32)
+        outputs = tf.concat([output_fw, output_bw], axis=2)
 
         # Save input shape for restoring later
         shape = tf.shape(inputs)
         batch_s, max_timesteps = shape[0], shape[1]
 
         # Reshaping to apply the same weights over the timesteps
-        # outputs is now of shape [batch_size*num_frames, num_hidden]
+        # outputs is now of shape [BATCH_SIZE*num_frames, NUM_HIDDEN]
         # So the same weights are trained for each timestep of each sequence
-        outputs = tf.reshape(outputs, [-1, num_hidden])
+        outputs = tf.reshape(outputs, [-1, 2 * NUM_HIDDEN])
 
         # Truncated normal with mean 0 and stdev=0.1
         # Tip: Try another initialization
         # see https://www.tensorflow.org/versions/r0.9/api_docs/python/contrib.layers.html#initializers
-        W = tf.Variable(tf.truncated_normal([num_hidden,
+        W = tf.Variable(tf.truncated_normal([2 * NUM_HIDDEN,
                                              num_classes],
                                             stddev=0.1))
         # Zero initialization
@@ -190,7 +191,7 @@ if __name__ == '__main__':
                 logits=logits, labels=targets))
 
         optimizer = tf.train.AdamOptimizer(
-            learning_rate).minimize(cross_entropy)
+            LEARNING_RATE).minimize(cross_entropy)
 
         # define an accuracy assessment operation
         correct_prediction = tf.equal(
@@ -199,6 +200,7 @@ if __name__ == '__main__':
 
         # finally setup the initialisation operator
         init_op = tf.global_variables_initializer()
+
 
     with tf.Session(graph=graph) as sess:
         saver = tf.train.Saver()
@@ -226,15 +228,25 @@ if __name__ == '__main__':
 
         outputs = sess.run(logits, feed)
 
-        for out in outputs:
-            phns = np.argmax(out, axis=1)
-            phn2idx, idx2phn = load_vocab()
-            phns = [idx2phn[x] for x in phns]
-            print(phns)
-            # prev = 'a'
-            # string = ''
-            # for phn in phns:
-            #     if phn != prev:
-            #         string += phn + ' '
-            #         prev = phn
-            # print(string)
+        return outputs
+
+
+
+if __name__ == '__main__':
+    args = get_arguments()
+    predict_file = args.predict_file
+
+    outputs = predict_phonemes()
+
+    for out in outputs:
+        phns = np.argmax(out, axis=1)
+        phn2idx, idx2phn = load_vocab()
+        phns = [idx2phn[x] for x in phns]
+        print(phns)
+        # prev = 'a'
+        # string = ''
+        # for phn in phns:
+        #     if phn != prev:
+        #         string += phn + ' '
+        #         prev = phn
+        # print(string)
