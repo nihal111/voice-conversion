@@ -185,7 +185,6 @@ def get_mags_and_phones(wav_file, sr, trim=False, random_crop=False, length=int(
 
     # Replace pau with h# for consistency with TIMIT
     phns[phns == 44.] = 0.
-    print(phns)
     # Trim
     if trim:
         start, end = bnd_list[1], bnd_list[-1]
@@ -344,6 +343,7 @@ def train():
 
     # Load Train data completely (All 4620 samples, unpadded, uncropped)
     all_train_targets, all_train_inputs = load_train_data()
+    print(all_train_targets.shape)
 
     train_mean = np.mean(np.concatenate(all_train_targets).ravel())
     train_std_dev = np.std(np.concatenate(all_train_targets).ravel())
@@ -528,7 +528,6 @@ if __name__ == '__main__':
     params_arr = [
         {'nh': 100, 'nl': 5, 'epochs': 100, 'batch_size': 20, 'keep_prob': 0.9}
     ]
-    #for params in params_arr:
-        #set_parameters(**params)
-        #train()
-    load_train_data()
+    for params in params_arr:
+        set_parameters(**params)
+        train()
