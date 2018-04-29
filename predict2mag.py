@@ -25,11 +25,11 @@ num_mags = hp.Default.n_fft/2+1
 # HYPER PARAMETERS
 TRAIN_CAP = 1000
 TEST_CAP = 500
-NUM_LAYERS = 2
+NUM_LAYERS = 5
 NUM_HIDDEN = 100
 LEARNING_RATE = 0.01
 NUM_EPOCHS = 100
-BATCH_SIZE = 100
+BATCH_SIZE = 20
 KEEP_PROB = 0.9
 
 SAVE_DIR = "./checkpoint2/save"
@@ -174,11 +174,26 @@ def load_test_data(phn_file):
     phns = np.zeros(shape=(1000,))
     bnd_list = []
     for line in open(phn_file, 'r').read().splitlines():
-        start_point, end_point, phn = line.split()
-        bnd = int(start_point) // hp.Default.hop_length
-        phns[bnd:] = phn2idx[phn]
-        bnd_list.append(bnd)
+        #For TIMIT files
+        #start_point, end_point, phn = line.split()
+        #bnd = int(start_point) // hp.Default.hop_length
+        #phns[bnd:] = phn2idx[phn]
+        #bnd_list.append(bnd)
+        #For Arctic files
+        bnd_list.append(0)
+        prev_bnd = 0
+        if(line!="#"):
+            end_time, _, phn = line.split()
+            bnd = int(float(end_time) * sr // hp.Default.hop_length)
+            phns[prev_bnd:bnd] = phn2idx[phn]
+            bnd_list.append(bnd)
+            prev_bnd = bnd
+    phns[phns == 44.] = 0.
+    end_point = bnd_list[-1]
     phns = phns[:(int(end_point) // hp.Default.hop_length)]
+    start, end = bnd_list[1], bnd_list[-1]
+    phns = phns[start:end]
+    #print (phns)
     return np.array([phns])
 
 

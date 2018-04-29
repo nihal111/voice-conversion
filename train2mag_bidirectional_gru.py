@@ -173,16 +173,18 @@ def get_mags_and_phones(wav_file, sr, trim=False, random_crop=False, length=int(
     phn2idx, idx2phn = load_vocab()
     phns = np.zeros(shape=(num_timesteps,))
     bnd_list = []
+    bnd_list.append(0)
+    prev_bnd = 0
     for line in open(phn_file, 'r').read().splitlines():
         if(line != "#"):
-            start_time, _, phn = line.split()
-            bnd = int(float(start_time) * sr // hp.Default.hop_length)
-            phns[bnd:] = phn2idx[phn]
+            end_time, _, phn = line.split()
+            bnd = int(float(end_time) * sr // hp.Default.hop_length)
+            phns[prev_bnd:bnd] = phn2idx[phn]
             bnd_list.append(bnd)
+            prev_bnd = bnd
 
     # Replace pau with h# for consistency with TIMIT
     phns[phns == 44.] = 0.
-
     # Trim
     if trim:
         start, end = bnd_list[1], bnd_list[-1]
@@ -341,6 +343,7 @@ def train():
 
     # Load Train data completely (All 4620 samples, unpadded, uncropped)
     all_train_targets, all_train_inputs = load_train_data()
+    print(all_train_targets.shape)
 
     train_mean = np.mean(np.concatenate(all_train_targets).ravel())
     train_std_dev = np.std(np.concatenate(all_train_targets).ravel())
