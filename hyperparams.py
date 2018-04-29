@@ -48,6 +48,7 @@ class Train2:
     data_path = '{}/arctic/bdl/arctic_a*.wav'.format(
         data_path_base)
     npz_file_path = 'arctic_train_files.npz'
+    mag_npz_file_path = 'arctic_train_files_mag.npz'
     # data_path = '{}/arctic/slt/*.wav'.format(data_path_base)
 
     # model
@@ -79,6 +80,7 @@ class Test2:
     # test
     data_path = '{}/arctic/bdl/arctic_b*.wav'.format(data_path_base)
     npz_file_path = 'arctic_test_files.npz'
+    mag_npz_file_path = 'arctic_test_files_mag.npz'
     batch_size = 32
 
 

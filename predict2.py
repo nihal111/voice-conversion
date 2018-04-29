@@ -25,12 +25,12 @@ num_features = 40
 # HYPER PARAMETERS
 TRAIN_CAP = 1000
 TEST_CAP = 500
-NUM_LAYERS = 3
-NUM_HIDDEN = 3
+NUM_LAYERS = 2
+NUM_HIDDEN = 100
 LEARNING_RATE = 0.01
-NUM_EPOCHS = 3
-BATCH_SIZE = 5
-KEEP_PROB = 1.0
+NUM_EPOCHS = 50
+BATCH_SIZE = 100
+KEEP_PROB = 0.9
 
 SAVE_DIR = "./checkpoint2/save"
 PLOTTING = True
@@ -39,48 +39,8 @@ SAVE_PER_EPOCHS = 1
 RESAMPLE_PER_EPOCHS = 10
 
 
-def initialise_plot():
-    plt.ion()
-    plt.show()
-    plt.gcf().clear()
-    plt.title('NH={} NL={} LR={} BS={} KP={}'.format(
-        NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE, KEEP_PROB))
-    plt.xlabel('Epoch')
-    plt.ylabel('Mean Square Error')
-
-
-def annotate_min(x, y, ax=None):
-    xmin = (x[np.argmin(y)] + 1) * SAVE_PER_EPOCHS
-    ymin = y.min()
-    text = "Min Error\nEpoch={}\nMSE={:.3f}".format(xmin, ymin)
-    if not ax:
-        ax = plt.gca()
-    bbox_props = dict(boxstyle="square,pad=0.3", fc="w", ec="k", lw=0.72)
-    plt.annotate(text, xy=(0.75, 0.8),
-                 xycoords='axes fraction', bbox=bbox_props)
-
-
-def plot_graph(train_accuracy, test_accuracy):
-    plt.gca().set_color_cycle(['red', 'green'])
-    plt.axis([0,
-              (len(train_accuracy) + 1) * SAVE_PER_EPOCHS,
-              min(train_accuracy + test_accuracy) * 0.9,
-              max(train_accuracy + test_accuracy) * 1.1])
-    plt.plot(np.arange(1, len(train_accuracy) + 1) *
-             SAVE_PER_EPOCHS, np.array(train_accuracy))
-    plt.plot(np.arange(1, len(test_accuracy) + 1) *
-             SAVE_PER_EPOCHS, np.array(test_accuracy))
-    x = np.array(np.arange(len(test_accuracy)))
-    annotate_min(x, np.asarray(test_accuracy))
-    plt.legend(['Train', 'Test'], loc='upper left')
-    plt.draw()
-    plt.pause(0.0001)
-
-
-def save_plot():
-    plt.savefig('./images2/bigru_{}_{}_{}_{}_{}.png'.format(
-        NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE, KEEP_PROB),
-        bbox_inches='tight')
+def db_to_amplitude(x):
+    return 10.0**(x/10.0)
 
 
 def preemphasis(x, coeff=0.97):
@@ -88,6 +48,10 @@ def preemphasis(x, coeff=0.97):
     Applies a pre-emphasis filter on x
     '''
     return signal.lfilter([1, -coeff], [1], x)
+
+
+def deemphasis(x, coeff=0.97):
+    return signal.lfilter([1], [1,-coeff], x)
 
 
 def load_vocab():
@@ -204,88 +168,22 @@ def get_mfccs_and_phones(wav_file, sr, trim=False, random_crop=False, length=int
     # phns = librosa.util.fix_length(phns, length, axis=0)
     return mfccs, phns
 
-
-def load_train_data():
-    wav_files = sorted(glob.glob(hp.Train2.data_path))
-    x = []
-    y = []
-    if os.path.isfile(hp.Train2.npz_file_path):
-        with np.load(hp.Train2.npz_file_path) as data:
-            x = data['mfccs']
-            y = data['phns']
-    else:
-        for i in xrange(len(wav_files)):
-            mfccs, phns = get_mfccs_and_phones(wav_files[i], hp.Default.sr)
-            x.append(mfccs)
-            y.append(phns)
-            print("File {}".format(i))
-        with open(hp.Train2.npz_file_path, 'wb') as fp:
-            np.savez_compressed(fp, mfccs=x, phns=y)
-
-    print("Loaded mfccs and phns from TRAIN data")
-
-    # # Shuffle
-    # idx = np.arange(0, len(x))
-    # np.random.shuffle(idx)
-    # idx = idx[:TRAIN_CAP]
-    # x_shuffle = [x[i] for i in idx]
-    # y_shuffle = [y[i] for i in idx]
-    return np.asarray(x), np.asarray(y)
-
-
-def load_test_data():
-    wav_files = sorted(glob.glob(hp.Test2.data_path))
-    x = []
-    y = []
-    if os.path.isfile(hp.Test2.npz_file_path):
-        with np.load(hp.Test2.npz_file_path) as data:
-            x = data['mfccs']
-            y = data['phns']
-    else:
-        for i in xrange(len(wav_files)):
-            mfccs, phns = get_mfccs_and_phones(wav_files[i], hp.Default.sr)
-            x.append(mfccs)
-            y.append(phns)
-            print("File {}".format(i))
-        with open(hp.Test2.npz_file_path, 'wb') as fp:
-            np.savez_compressed(fp, mfccs=x, phns=y)
-
-    print("Loaded mfccs and phns from TEST data")
-
-    # # Shuffle
-    # idx = np.arange(0, len(x))
-    # np.random.shuffle(idx)
-    # idx = idx[:TEST_CAP]
-    # x_shuffle = [x[i] for i in idx]
-    # y_shuffle = [y[i] for i in idx]
-    return np.asarray(x), np.asarray(y)
-
-
-def sample_data(mfccs_array, phns_array):
-
-    length = int(hp.Default.duration / hp.Default.frame_shift + 1)
-
-    for i in range(len(mfccs_array)):
-        mfccs = mfccs_array[i]
-        phns = phns_array[i]
-        # Random crop
-        start = np.random.choice(
-            range(np.maximum(1, len(mfccs) - length)), 1)[0]
-        end = start + length
-        mfccs = mfccs[start:end]
-        phns = phns[start:end]
-        assert (len(mfccs) == len(phns))
-
-        # Padding or crop
-        mfccs = librosa.util.fix_length(mfccs, length, axis=0)
-        phns = librosa.util.fix_length(phns, length, axis=0)
-
-        mfccs_array[i], phns_array[i] = mfccs, phns
-    return np.asarray(mfccs_array), np.asarray(phns_array)
+def load_test_data(phn_file):
+    phn2idx, idx2phn = load_vocab()
+    phns = np.zeros(shape=(100000,))
+    bnd_list = []
+    for line in open(phn_file, 'r').read().splitlines():
+        start_point, end_point, phn = line.split()
+        bnd = int(start_point) // hp.Default.hop_length
+        phns[bnd:] = phn2idx[phn]
+        bnd_list.append(bnd)
+    phns = phns[:int(end_point)]
+    return np.array([phns])
 
 
 def get_arguments():
     parser = argparse.ArgumentParser()
+    parser.add_argument('predict_file', type=str, help='predict file path')
     optional = parser.add_argument_group('hyperparams')
     optional.add_argument('--nh', type=int, required=False,
                           help='number of hidden nodes')
@@ -307,21 +205,6 @@ def get_arguments():
         BATCH_SIZE = arguments.batch_size
     return arguments
 
-
-def next_batch(num, inputs, outputs):
-    '''
-    Return a total of `num` random samples and labels.
-    inputs is phns and outputs is mfccs
-    '''
-    idx = np.arange(0, len(inputs))
-    np.random.shuffle(idx)
-    idx = idx[:num]
-    outputs_shuffle = [outputs[i] for i in idx]
-    inputs_shuffle = np.asarray([one_hot(inputs[i]) for i in idx])
-    train_seq_len = [len(x) for x in inputs_shuffle]
-    return inputs_shuffle, outputs_shuffle, train_seq_len
-
-
 def one_hot(indices, depth=num_classes):
     one_hot_labels = np.zeros((len(indices), depth))
     one_hot_labels[np.arange(len(indices)), indices] = 1
@@ -337,14 +220,41 @@ def set_parameters(nh, nl, epochs, batch_size, keep_prob):
     KEEP_PROB = keep_prob
 
 
-def train():
+def spectrogram2wav(mag, n_fft, win_length, hop_length, num_iters, phase_angle=None, length=None):
+    assert(num_iters > 0)
+    if phase_angle is None:
+        phase_angle = np.pi * np.random.rand(*mag.shape)
+    spec = mag * np.exp(1.j * phase_angle)
+    for i in range(num_iters):
+        wav = librosa.istft(spec, win_length=win_length, hop_length=hop_length, length=length)
+        if i != num_iters - 1:
+            spec = librosa.stft(wav, n_fft=n_fft, win_length=win_length, hop_length=hop_length)
+            _, phase = librosa.magphase(spec)
+            phase_angle = np.angle(phase)
+            spec = mag * np.exp(1.j * phase_angle)
+    return deemphasis(wav)
 
-    # Load Train data completely (All 4620 samples, unpadded, uncropped)
-    all_train_targets, all_train_inputs = load_train_data()
 
-    # Load Test data completely (All 1680 samples, unpadded, uncropped)
-    all_test_targets, all_test_inputs = load_test_data()
+def _get_wav_from_mfccs(mfccs, preemphasis_coeff, n_fft, win_length, hop_length, n_wav):
+    dctm = librosa.filters.dct(hp.Default.n_mfcc, hp.Default.n_mels)
+    mel_basis = librosa.filters.mel(hp.Default.sr, hp.Default.n_fft, hp.Default.n_mels)
+    bin_scaling = 1.0/np.maximum(0.0005, np.sum(np.dot(mel_basis.T, mel_basis),axis=0))
+    mel_db = np.dot(dctm.T,mfccs.T)
+    mel = db_to_amplitude(mel_db)
+    recon_magsq = bin_scaling[:, np.newaxis] * np.dot(mel_basis.T, mel)
+    mag = np.sqrt(recon_magsq)
+    #excitation = np.random.randn(n_wav)
+    #E = librosa.stft(excitation, n_fft=n_fft, hop_length=hop_length, win_length=win_length)
+    #recon = librosa.core.istft(np.sqrt(recon_stft), hop_length=hop_length, win_length=win_length)
+    recon = spectrogram2wav(mag, n_fft, win_length, hop_length, hp.Default.n_iter)
+    recon = deemphasis(recon, coeff=preemphasis_coeff)
+    return recon
 
+
+if __name__ == '__main__':
+    args = get_arguments()
+    predict_file = args.predict_file
+    
     graph = tf.Graph()
     with graph.as_default():
         # Input placeholder of shape [BATCH_SIZE, num_frames, num_phn_classes]
@@ -425,98 +335,18 @@ def train():
             sess.run(init_op)
             print("Model initialised.\n")
 
-        train_errors = []
-        test_errors = []
-        if PLOTTING:
-            initialise_plot()
+        predict_inputs = load_test_data(predict_file)
+        predict_inputs = np.array(predict_inputs).astype(int)
 
-        for epoch in range(1, NUM_EPOCHS + 1):
-            train_cost = 0
-            start = time.time()
+        predict_inputs = np.asarray([one_hot(x) for x in predict_inputs])
 
-            if (epoch % RESAMPLE_PER_EPOCHS == 0 or epoch == 1):
-                # sample_data returns mfccs,phns
-                train_targets, train_inputs = sample_data(
-                    all_train_targets, all_train_inputs)
-                train_targets = np.array(list(train_targets))
-                train_inputs = np.array(list(train_inputs))
+        num_examples = len(predict_inputs)
+        predict_seq_len = [len(x) for x in predict_inputs]
 
-                train_inputs = train_inputs.astype(int)
-                train_targets = (train_targets - np.mean(train_targets)) / \
-                    np.std(train_targets)
+        feed = {inputs: predict_inputs,
+                seq_len: predict_seq_len,
+                keep_prob: 1.0}
 
-                num_examples = len(train_inputs)
-
-                test_targets, test_inputs = sample_data(
-                    all_test_targets, all_test_inputs)
-
-                test_targets = np.array(list(test_targets))
-                test_inputs = np.array(list(test_inputs))
-
-                test_inputs = test_inputs.astype(int)
-                test_targets = (test_targets - np.mean(test_targets)) / \
-                    np.std(test_targets)
-                print("Re-sampled data (2sec of every wav)")
-
-            for batch in range(int(num_examples / BATCH_SIZE)):
-
-                batch_x, batch_y, batch_seq_len = next_batch(
-                    BATCH_SIZE, train_inputs, train_targets)
-
-                feed = {inputs: batch_x,
-                        targets: batch_y,
-                        seq_len: batch_seq_len,
-                        keep_prob: KEEP_PROB}
-
-                batch_cost, _ = sess.run([mse_loss, optimizer], feed)
-                train_cost += batch_cost * BATCH_SIZE
-
-            train_cost /= num_examples
-            print("Epoch {}/{}, train_cost = {:.3f}, time = {:.3f}".format(
-                epoch, NUM_EPOCHS, train_cost, time.time() - start))
-
-            if (epoch % SAVE_PER_EPOCHS == 0):
-                save_path = saver.save(sess, SAVE_PATH)
-                print("Model saved in path: %s" % save_path)
-
-                batch_x, batch_y, batch_seq_len = next_batch(
-                    TRAIN_CAP, train_inputs, train_targets)
-
-                train_err = sess.run(mse_loss, feed_dict={
-                    inputs: batch_x,
-                    targets: batch_y,
-                    seq_len: batch_seq_len,
-                    keep_prob: 1.0})
-
-                batch_x, batch_y, batch_seq_len = next_batch(
-                    TEST_CAP, test_inputs, test_targets)
-
-                test_err = sess.run(mse_loss, feed_dict={
-                    inputs: batch_x,
-                    targets: batch_y,
-                    seq_len: batch_seq_len,
-                    keep_prob: 1.0})
-
-                log = "\nEpoch {}/{}, train_error = {:.3f}, " + \
-                    "test_error = {:.3f} time = {:.3f}\n"
-                print(log.format(epoch, NUM_EPOCHS, train_err,
-                                 test_err, time.time() - start))
-
-                train_errors.append(train_err)
-                test_errors.append(test_err)
-
-                if PLOTTING:
-                    plot_graph(train_errors, test_errors)
-
-        if PLOTTING:
-            save_plot()
-
-
-if __name__ == '__main__':
-    args = get_arguments()
-    params_arr = [
-        {'nh': 100, 'nl': 2, 'epochs': 50, 'batch_size': 100, 'keep_prob': 0.9}
-    ]
-    for params in params_arr:
-        set_parameters(**params)
-        train()
+        outputs = sess.run(predictions, feed)
+        print(predictions)
+        print(predictions.shape)

@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 
 num_classes = 61
 num_features = 40
-
+num_mags = hp.Default.n_fft/2+1
 
 # HYPER PARAMETERS
 TRAIN_CAP = 1000
@@ -147,7 +147,7 @@ def _get_mfcc_log_spec_and_log_mel_spec(wav, preemphasis_coeff, n_fft, win_lengt
     return mfccs.T, mag.T, mel.T  # (t, n_mfccs), (t, 1+n_fft/2), (t, n_mels)
 
 
-def get_mfccs_and_phones(wav_file, sr, trim=False, random_crop=False, length=int(hp.Default.duration / hp.Default.frame_shift + 1)):
+def get_mags_and_phones(wav_file, sr, trim=False, random_crop=False, length=int(hp.Default.duration / hp.Default.frame_shift + 1)):
     '''
     This is applied in `train1` or `test1` phase.
 
@@ -162,11 +162,11 @@ def get_mfccs_and_phones(wav_file, sr, trim=False, random_crop=False, length=int
     # Load
     wav, sr = librosa.load(wav_file, sr=sr)
 
-    mfccs, _, _ = _get_mfcc_log_spec_and_log_mel_spec(wav, hp.Default.preemphasis, hp.Default.n_fft,
+    _, mags, _ = _get_mfcc_log_spec_and_log_mel_spec(wav, hp.Default.preemphasis, hp.Default.n_fft,
                                                       hp.Default.win_length,
                                                       hp.Default.hop_length)
     # timesteps
-    num_timesteps = mfccs.shape[0]
+    num_timesteps = mags.shape[0]
 
     # phones (targets)
     phn_file = wav_file.replace("wav", "lab")
@@ -186,9 +186,9 @@ def get_mfccs_and_phones(wav_file, sr, trim=False, random_crop=False, length=int
     # Trim
     if trim:
         start, end = bnd_list[1], bnd_list[-1]
-        mfccs = mfccs[start:end]
+        mags = mags[start:end]
         phns = phns[start:end]
-        assert (len(mfccs) == len(phns))
+        assert (len(mags) == len(phns))
 
     # # Random crop
     # if random_crop:
@@ -202,27 +202,27 @@ def get_mfccs_and_phones(wav_file, sr, trim=False, random_crop=False, length=int
     # # Padding or crop
     # mfccs = librosa.util.fix_length(mfccs, length, axis=0)
     # phns = librosa.util.fix_length(phns, length, axis=0)
-    return mfccs, phns
+    return mags, phns
 
 
 def load_train_data():
     wav_files = sorted(glob.glob(hp.Train2.data_path))
     x = []
     y = []
-    if os.path.isfile(hp.Train2.npz_file_path):
-        with np.load(hp.Train2.npz_file_path) as data:
-            x = data['mfccs']
+    if os.path.isfile(hp.Train2.mag_npz_file_path):
+        with np.load(hp.Train2.mag_npz_file_path) as data:
+            x = data['mags']
             y = data['phns']
     else:
         for i in xrange(len(wav_files)):
-            mfccs, phns = get_mfccs_and_phones(wav_files[i], hp.Default.sr)
-            x.append(mfccs)
+            mags, phns = get_mags_and_phones(wav_files[i], hp.Default.sr)
+            x.append(mags)
             y.append(phns)
             print("File {}".format(i))
-        with open(hp.Train2.npz_file_path, 'wb') as fp:
-            np.savez_compressed(fp, mfccs=x, phns=y)
+        with open(hp.Train2.mag_npz_file_path, 'wb') as fp:
+            np.savez_compressed(fp, mags=x, phns=y)
 
-    print("Loaded mfccs and phns from TRAIN data")
+    print("Loaded mags and phns from TRAIN data")
 
     # # Shuffle
     # idx = np.arange(0, len(x))
@@ -237,20 +237,20 @@ def load_test_data():
     wav_files = sorted(glob.glob(hp.Test2.data_path))
     x = []
     y = []
-    if os.path.isfile(hp.Test2.npz_file_path):
-        with np.load(hp.Test2.npz_file_path) as data:
-            x = data['mfccs']
+    if os.path.isfile(hp.Test2.mag_npz_file_path):
+        with np.load(hp.Test2.mag_npz_file_path) as data:
+            x = data['mags']
             y = data['phns']
     else:
         for i in xrange(len(wav_files)):
-            mfccs, phns = get_mfccs_and_phones(wav_files[i], hp.Default.sr)
-            x.append(mfccs)
+            mags, phns = get_mags_and_phones(wav_files[i], hp.Default.sr)
+            x.append(mags)
             y.append(phns)
             print("File {}".format(i))
-        with open(hp.Test2.npz_file_path, 'wb') as fp:
-            np.savez_compressed(fp, mfccs=x, phns=y)
+        with open(hp.Test2.mag_npz_file_path, 'wb') as fp:
+            np.savez_compressed(fp, mags=x, phns=y)
 
-    print("Loaded mfccs and phns from TEST data")
+    print("Loaded mags and phns from TEST data")
 
     # # Shuffle
     # idx = np.arange(0, len(x))
@@ -261,27 +261,27 @@ def load_test_data():
     return np.asarray(x), np.asarray(y)
 
 
-def sample_data(mfccs_array, phns_array):
+def sample_data(mags_array, phns_array):
 
     length = int(hp.Default.duration / hp.Default.frame_shift + 1)
 
-    for i in range(len(mfccs_array)):
-        mfccs = mfccs_array[i]
+    for i in range(len(mags_array)):
+        mags = mags_array[i]
         phns = phns_array[i]
         # Random crop
         start = np.random.choice(
-            range(np.maximum(1, len(mfccs) - length)), 1)[0]
+            range(np.maximum(1, len(mags) - length)), 1)[0]
         end = start + length
-        mfccs = mfccs[start:end]
+        mags = mags[start:end]
         phns = phns[start:end]
-        assert (len(mfccs) == len(phns))
+        assert (len(mags) == len(phns))
 
         # Padding or crop
-        mfccs = librosa.util.fix_length(mfccs, length, axis=0)
+        mags = librosa.util.fix_length(mags, length, axis=0)
         phns = librosa.util.fix_length(phns, length, axis=0)
 
-        mfccs_array[i], phns_array[i] = mfccs, phns
-    return np.asarray(mfccs_array), np.asarray(phns_array)
+        mags_array[i], phns_array[i] = mags, phns
+    return np.asarray(mags_array), np.asarray(phns_array)
 
 
 def get_arguments():
@@ -342,6 +342,9 @@ def train():
     # Load Train data completely (All 4620 samples, unpadded, uncropped)
     all_train_targets, all_train_inputs = load_train_data()
 
+    train_mean = np.mean([np.mean(x) for x in all_train_targets])
+    train_std_dev = np.std([np.std(x) for x in all_train_targets])
+
     # Load Test data completely (All 1680 samples, unpadded, uncropped)
     all_test_targets, all_test_inputs = load_test_data()
 
@@ -351,12 +354,16 @@ def train():
         inputs = tf.placeholder(tf.float32, [None, None, num_classes])
 
         # Target placeholder of shape [BATCH_SIZE, num_frames, num__mfcc_features]
-        targets = tf.placeholder(tf.int32, [None, None, num_features])
+        targets = tf.placeholder(tf.int32, [None, None, num_mags])
 
         # List of sequence lengths (num_frames)
         seq_len = tf.placeholder(tf.int32, [None])
 
         keep_prob = tf.placeholder(tf.float32, shape=())
+
+        mean = tf.Variable(train_mean)
+
+        std_dev = tf.Variable(train_std_dev)
 
         # Get a GRU cell with dropout for use in RNN
         def get_a_cell(gru_size, keep_prob=1.0):
@@ -390,16 +397,18 @@ def train():
         # Tip: Try another initialization
         # see https://www.tensorflow.org/versions/r0.9/api_docs/python/contrib.layers.html#initializers
         W = tf.Variable(tf.truncated_normal([2 * NUM_HIDDEN,
-                                             num_features],
+                                             num_mags],
                                             stddev=0.1))
         # Zero initialization
-        b = tf.Variable(tf.constant(0., shape=[num_features]))
+        b = tf.Variable(tf.constant(0., shape=[num_mags]))
 
         # Doing the affine projection
         predictions = tf.matmul(outputs, W) + b
 
         # Reshaping back to the original shape
-        predictions = tf.reshape(predictions, [batch_s, -1, num_features])
+        predictions = tf.reshape(predictions, [batch_s, -1, num_mags])
+
+        scaled_predictions = predictions * std_dev + mean
 
         # mse_loss = tf.reduce_mean(
         #     tf.losses.mean_squared_error(
@@ -415,7 +424,7 @@ def train():
 
     with tf.Session(graph=graph) as sess:
         saver = tf.train.Saver()
-        SAVE_PATH = SAVE_DIR + '_bigru_{}_{}_{}_{}_{}/model.ckpt'.format(
+        SAVE_PATH = SAVE_DIR + '_mag_bigru_{}_{}_{}_{}_{}/model.ckpt'.format(
             NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE, KEEP_PROB)
         try:
             saver.restore(sess, SAVE_PATH)
@@ -442,8 +451,8 @@ def train():
                 train_inputs = np.array(list(train_inputs))
 
                 train_inputs = train_inputs.astype(int)
-                train_targets = (train_targets - np.mean(train_targets)) / \
-                    np.std(train_targets)
+
+                train_targets = (train_targets - train_mean) / train_std_dev
 
                 num_examples = len(train_inputs)
 
@@ -454,8 +463,7 @@ def train():
                 test_inputs = np.array(list(test_inputs))
 
                 test_inputs = test_inputs.astype(int)
-                test_targets = (test_targets - np.mean(test_targets)) / \
-                    np.std(test_targets)
+                test_targets = (test_targets - train_mean) / train_std_dev
                 print("Re-sampled data (2sec of every wav)")
 
             for batch in range(int(num_examples / BATCH_SIZE)):
@@ -515,7 +523,7 @@ def train():
 if __name__ == '__main__':
     args = get_arguments()
     params_arr = [
-        {'nh': 100, 'nl': 2, 'epochs': 50, 'batch_size': 100, 'keep_prob': 0.9}
+        {'nh': 100, 'nl': 1, 'epochs': 50, 'batch_size': 100, 'keep_prob': 0.9}
     ]
     for params in params_arr:
         set_parameters(**params)
