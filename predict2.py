@@ -170,14 +170,29 @@ def get_mfccs_and_phones(wav_file, sr, trim=False, random_crop=False, length=int
 
 def load_test_data(phn_file):
     phn2idx, idx2phn = load_vocab()
-    phns = np.zeros(shape=(100000,))
+    phns = np.zeros(shape=(1000,))
     bnd_list = []
     for line in open(phn_file, 'r').read().splitlines():
-        start_point, end_point, phn = line.split()
-        bnd = int(start_point) // hp.Default.hop_length
-        phns[bnd:] = phn2idx[phn]
-        bnd_list.append(bnd)
-    phns = phns[:int(end_point)]
+        #For TIMIT files
+        #start_point, end_point, phn = line.split()
+        #bnd = int(start_point) // hp.Default.hop_length
+        #phns[bnd:] = phn2idx[phn]
+        #bnd_list.append(bnd)
+        #For Arctic files
+        bnd_list.append(0)
+        prev_bnd = 0
+        if(line!="#"):
+            end_time, _, phn = line.split()
+            bnd = int(float(end_time) * sr // hp.Default.hop_length)
+            phns[prev_bnd:bnd] = phn2idx[phn]
+            bnd_list.append(bnd)
+            prev_bnd = bnd
+    phns[phns == 44.] = 0.
+    end_point = bnd_list[-1]
+    phns = phns[:(int(end_point) // hp.Default.hop_length)]
+    start, end = bnd_list[1], bnd_list[-1]
+    phns = phns[start:end]
+    #print (phns)
     return np.array([phns])
 
 
@@ -204,6 +219,21 @@ def get_arguments():
     if arguments.batch_size:
         BATCH_SIZE = arguments.batch_size
     return arguments
+
+
+def next_batch(num, inputs, outputs):
+    '''
+    Return a total of `num` random samples and labels.
+    inputs is phns and outputs is mfccs
+    '''
+    idx = np.arange(0, len(inputs))
+    np.random.shuffle(idx)
+    idx = idx[:num]
+    outputs_shuffle = [outputs[i] for i in idx]
+    inputs_shuffle = np.asarray([one_hot(inputs[i]) for i in idx])
+    train_seq_len = [len(x) for x in inputs_shuffle]
+    return inputs_shuffle, outputs_shuffle, train_seq_len
+
 
 def one_hot(indices, depth=num_classes):
     one_hot_labels = np.zeros((len(indices), depth))
