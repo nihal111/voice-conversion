@@ -190,6 +190,7 @@ def load_test_data(phn_file):
             bnd_list.append(bnd)
             prev_bnd = bnd
     phns[phns == 44.] = 0.
+    print(phns)
     start, end = bnd_list[0], bnd_list[-1]
     phns = phns[start:end]
     return np.array([phns])
