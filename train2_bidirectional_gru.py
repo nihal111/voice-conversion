@@ -30,6 +30,7 @@ NUM_HIDDEN = 3
 LEARNING_RATE = 0.01
 NUM_EPOCHS = 3
 BATCH_SIZE = 5
+KEEP_PROB = 1.0
 
 SAVE_DIR = "./checkpoint2/save"
 PLOTTING = True
@@ -42,8 +43,8 @@ def initialise_plot():
     plt.ion()
     plt.show()
     plt.gcf().clear()
-    plt.title('NH={} NL={} LR={} BS={}'.format(
-        NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE))
+    plt.title('NH={} NL={} LR={} BS={} KP={}'.format(
+        NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE, KEEP_PROB))
     plt.xlabel('Epoch')
     plt.ylabel('Mean Square Error')
 
@@ -77,8 +78,8 @@ def plot_graph(train_accuracy, test_accuracy):
 
 
 def save_plot():
-    plt.savefig('./images2/bigru_{}_{}_{}_{}.png'.format(
-        NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE),
+    plt.savefig('./images2/bigru_{}_{}_{}_{}_{}.png'.format(
+        NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE, KEEP_PROB),
         bbox_inches='tight')
 
 
@@ -327,12 +328,13 @@ def one_hot(indices, depth=num_classes):
     return one_hot_labels
 
 
-def set_parameters(nh, nl, epochs, batch_size):
-    global NUM_HIDDEN, NUM_LAYERS, NUM_EPOCHS, BATCH_SIZE
+def set_parameters(nh, nl, epochs, batch_size, keep_prob):
+    global NUM_HIDDEN, NUM_LAYERS, NUM_EPOCHS, BATCH_SIZE, KEEP_PROB
     NUM_HIDDEN = nh
     NUM_LAYERS = nl
     NUM_EPOCHS = epochs
     BATCH_SIZE = batch_size
+    KEEP_PROB = keep_prob
 
 
 def train():
@@ -354,6 +356,8 @@ def train():
         # List of sequence lengths (num_frames)
         seq_len = tf.placeholder(tf.int32, [None])
 
+        keep_prob = tf.placeholder(tf.float32, shape=())
+
         # Get a GRU cell with dropout for use in RNN
         def get_a_cell(gru_size, keep_prob=1.0):
             gru = tf.nn.rnn_cell.GRUCell(gru_size)
@@ -363,7 +367,7 @@ def train():
 
         # Make a multi layer RNN of NUM_LAYERS layers of cells
         stack = tf.nn.rnn_cell.MultiRNNCell(
-            [get_a_cell(NUM_HIDDEN) for _ in range(NUM_LAYERS)])
+            [get_a_cell(NUM_HIDDEN, keep_prob) for _ in range(NUM_LAYERS)])
 
         # outputs is the output of the RNN at each time step (frame)
         # RNN has NUM_HIDDEN output nodes
@@ -411,8 +415,8 @@ def train():
 
     with tf.Session(graph=graph) as sess:
         saver = tf.train.Saver()
-        SAVE_PATH = SAVE_DIR + '_bigru_{}_{}_{}_{}/model.ckpt'.format(
-            NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE)
+        SAVE_PATH = SAVE_DIR + '_bigru_{}_{}_{}_{}_{}/model.ckpt'.format(
+            NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE, KEEP_PROB)
         try:
             saver.restore(sess, SAVE_PATH)
             print("Model restored.\n")
@@ -461,7 +465,8 @@ def train():
 
                 feed = {inputs: batch_x,
                         targets: batch_y,
-                        seq_len: batch_seq_len}
+                        seq_len: batch_seq_len,
+                        keep_prob: KEEP_PROB}
 
                 batch_cost, _ = sess.run([mse_loss, optimizer], feed)
                 train_cost += batch_cost * BATCH_SIZE
@@ -480,7 +485,8 @@ def train():
                 train_err = sess.run(mse_loss, feed_dict={
                     inputs: batch_x,
                     targets: batch_y,
-                    seq_len: batch_seq_len})
+                    seq_len: batch_seq_len,
+                    keep_prob: 1.0})
 
                 batch_x, batch_y, batch_seq_len = next_batch(
                     TEST_CAP, test_inputs, test_targets)
@@ -488,7 +494,8 @@ def train():
                 test_err = sess.run(mse_loss, feed_dict={
                     inputs: batch_x,
                     targets: batch_y,
-                    seq_len: batch_seq_len})
+                    seq_len: batch_seq_len,
+                    keep_prob: 1.0})
 
                 log = "\nEpoch {}/{}, train_error = {:.3f}, " + \
                     "test_error = {:.3f} time = {:.3f}\n"
@@ -507,9 +514,20 @@ def train():
 
 if __name__ == '__main__':
     args = get_arguments()
-    params_arr = [{'nh': 50, 'nl': 3, 'epochs': 100, 'batch_size': 100},
-                  {'nh': 75, 'nl': 3, 'epochs': 100, 'batch_size': 100},
-                  {'nh': 100, 'nl': 3, 'epochs': 100, 'batch_size': 100}]
+    params_arr = [
+        {'nh': 50, 'nl': 3, 'epochs': 100, 'batch_size': 100, 'keep_prob': 0.6},
+        {'nh': 50, 'nl': 3, 'epochs': 100, 'batch_size': 100, 'keep_prob': 0.7},
+        {'nh': 50, 'nl': 3, 'epochs': 100, 'batch_size': 100, 'keep_prob': 0.8},
+        {'nh': 50, 'nl': 3, 'epochs': 100, 'batch_size': 100, 'keep_prob': 0.9},
+        {'nh': 75, 'nl': 3, 'epochs': 100, 'batch_size': 100, 'keep_prob': 0.6},
+        {'nh': 75, 'nl': 3, 'epochs': 100, 'batch_size': 100, 'keep_prob': 0.7},
+        {'nh': 75, 'nl': 3, 'epochs': 100, 'batch_size': 100, 'keep_prob': 0.8},
+        {'nh': 75, 'nl': 3, 'epochs': 100, 'batch_size': 100, 'keep_prob': 0.9}
+        {'nh': 100, 'nl': 3, 'epochs': 100, 'batch_size': 50, 'keep_prob': 0.6},
+        {'nh': 100, 'nl': 3, 'epochs': 100, 'batch_size': 50, 'keep_prob': 0.7},
+        {'nh': 100, 'nl': 3, 'epochs': 100, 'batch_size': 50, 'keep_prob': 0.8},
+        {'nh': 100, 'nl': 3, 'epochs': 100, 'batch_size': 50, 'keep_prob': 0.9}
+    ]
     for params in params_arr:
         set_parameters(**params)
         train()
