@@ -25,7 +25,6 @@ num_mels = 80
 
 
 # HYPER PARAMETERS
-TEST_CAP = 500
 NUM_LAYERS = 2
 NUM_HIDDEN = 100
 LEARNING_RATE = 0.01
@@ -402,52 +401,70 @@ def train():
             return drop
 
         # Make a multi layer RNN of NUM_LAYERS layers of cells
-        stack = tf.nn.rnn_cell.MultiRNNCell(
+        stack1 = tf.nn.rnn_cell.MultiRNNCell(
             [get_a_cell(NUM_HIDDEN, keep_prob) for _ in range(NUM_LAYERS)])
 
-        # outputs is the output of the RNN at each time step (frame)
-        # RNN has NUM_HIDDEN output nodes
-        # outputs has shape [BATCH_SIZE, num_frames, NUM_HIDDEN]
-        # The second output is the last state and we will not use that
-        (output_fw, output_bw), _ = tf.nn.bidirectional_dynamic_rnn(
-            stack, stack, inputs, seq_len, dtype=tf.float32)
-        outputs = tf.concat([output_fw, output_bw], axis=2)
+        (mel_output_fw, mel_output_bw), _ = tf.nn.bidirectional_dynamic_rnn(
+            stack1, stack1, inputs, seq_len, dtype=tf.float32)
+        mel_outputs = tf.concat([mel_output_fw, mel_output_bw], axis=2)
 
         # Save input shape for restoring later
         shape = tf.shape(inputs)
         batch_s, max_timesteps = shape[0], shape[1]
 
         # Reshaping to apply the same weights over the timesteps
-        # outputs is now of shape [BATCH_SIZE*num_frames, NUM_HIDDEN]
+        # mel_outputs is now of shape [BATCH_SIZE*num_frames, NUM_HIDDEN]
         # So the same weights are trained for each timestep of each sequence
-        outputs = tf.reshape(outputs, [-1, 2 * NUM_HIDDEN])
+        mel_outputs = tf.reshape(mel_outputs, [-1, 2 * NUM_HIDDEN])
 
         # Truncated normal with mean 0 and stdev=0.1
         # Tip: Try another initialization
-        # see https://www.tensorflow.org/versions/r0.9/api_docs/python/contrib.layers.html#initializers
-        W = tf.Variable(tf.truncated_normal([2 * NUM_HIDDEN,
-                                             num_mels],
-                                            stddev=0.1))
+        W1 = tf.Variable(tf.truncated_normal([2 * NUM_HIDDEN,
+                                              num_mels],
+                                             stddev=0.1))
         # Zero initialization
-        b = tf.Variable(tf.constant(0., shape=[num_mels]))
+        b1 = tf.Variable(tf.constant(0., shape=[num_mels]))
 
         # Doing the affine projection
-        mels_predictions = tf.matmul(outputs, W) + b
+        mels_predictions = tf.matmul(mel_outputs, W1) + b1
 
         # Reshaping back to the original shape
         mels_predictions = tf.reshape(
             mels_predictions, [batch_s, -1, num_mels])
 
-        scaled_predictions = mels_predictions * mels_std_dev + mels_mean
+        scaled_mels_predictions = mels_predictions * mels_std_dev + mels_mean
 
-        # mse_loss = tf.reduce_mean(
-        #     tf.losses.mean_squared_error(
-        #         predictions=predictions, labels=targets))
-        # define an accuracy assessment operation
+        stack2 = tf.nn.rnn_cell.MultiRNNCell(
+            [get_a_cell(NUM_HIDDEN, keep_prob) for _ in range(NUM_LAYERS)])
+
+        (mag_output_fw, mag_output_bw), _ = tf.nn.bidirectional_dynamic_rnn(
+            stack2, stack2, mels_predictions, seq_len,
+            dtype=tf.float32, scope="bi_RNN2")
+        mag_outputs = tf.concat([mag_output_fw, mag_output_bw], axis=2)
+
+        mag_outputs = tf.reshape(mag_outputs, [-1, 2 * NUM_HIDDEN])
+
+        W2 = tf.Variable(tf.truncated_normal([2 * NUM_HIDDEN,
+                                              num_mags],
+                                             stddev=0.1))
+        # Zero initialization
+        b2 = tf.Variable(tf.constant(0., shape=[num_mags]))
+
+        # Doing the affine projection
+        mags_predictions = tf.matmul(mag_outputs, W2) + b2
+
+        # Reshaping back to the original shape
+        mags_predictions = tf.reshape(
+            mags_predictions, [batch_s, -1, num_mags])
+
+        scaled_mags_predictions = mags_predictions * mags_std_dev + mags_mean
+
         mels_mse_loss = tf.losses.mean_squared_error(
             mels_predictions, target_mels)
+        mags_mse_loss = tf.losses.mean_squared_error(
+            mags_predictions, target_mags)
 
-        total_mse_loss = mels_mse_loss
+        total_mse_loss = mels_mse_loss + mags_mse_loss
 
         optimizer = tf.train.AdamOptimizer(
             LEARNING_RATE).minimize(total_mse_loss)
@@ -500,9 +517,9 @@ def train():
                 test_inputs = np.array(list(test_inputs))
 
                 test_inputs = test_inputs.astype(int)
-                test_mags = (train_mags - train_mags_mean) / \
+                test_mags = (test_mags - train_mags_mean) / \
                     train_mags_std_dev
-                test_mels = (train_mels - train_mels_mean) / \
+                test_mels = (test_mels - train_mels_mean) / \
                     train_mels_std_dev
                 print("Re-sampled data (2sec of every wav)")
 
@@ -571,7 +588,7 @@ def train():
 if __name__ == '__main__':
     args = get_arguments()
     params_arr = [
-        {'nh': 100, 'nl': 2, 'epochs': 50, 'batch_size': 100, 'keep_prob': 0.9}
+        {'nh': 100, 'nl': 2, 'epochs': 50, 'batch_size': 40, 'keep_prob': 0.9}
     ]
     for params in params_arr:
         set_parameters(**params)
