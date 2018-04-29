@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 
 
 num_classes = 61
-num_mags = hp.Default.n_fft/2+1
+num_mags = hp.Default.n_fft / 2 + 1
 
 # HYPER PARAMETERS
 TRAIN_CAP = 1000
@@ -39,7 +39,7 @@ RESAMPLE_PER_EPOCHS = 10
 
 
 def db_to_amplitude(x):
-    return 10.0**(x/10.0)
+    return 10.0**(x / 10.0)
 
 
 def preemphasis(x, coeff=0.97):
@@ -50,7 +50,7 @@ def preemphasis(x, coeff=0.97):
 
 
 def deemphasis(x, coeff=0.97):
-    return signal.lfilter([1], [1,-coeff], x)
+    return signal.lfilter([1], [1, -coeff], x)
 
 
 def load_vocab():
@@ -126,8 +126,8 @@ def get_mags_and_phones(wav_file, sr, trim=False, random_crop=False, length=int(
     wav, sr = librosa.load(wav_file, sr=sr)
 
     _, mags, _ = _get_mfcc_log_spec_and_log_mel_spec(wav, hp.Default.preemphasis, hp.Default.n_fft,
-                                                      hp.Default.win_length,
-                                                      hp.Default.hop_length)
+                                                     hp.Default.win_length,
+                                                     hp.Default.hop_length)
     # timesteps
     num_timesteps = mags.shape[0]
 
@@ -239,9 +239,11 @@ def spectrogram2wav(mag, n_fft, win_length, hop_length, num_iters, phase_angle=N
         phase_angle = np.pi * np.random.rand(*mag.shape)
     spec = mag * np.exp(1.j * phase_angle)
     for i in range(num_iters):
-        wav = librosa.istft(spec, win_length=win_length, hop_length=hop_length, length=length)
+        wav = librosa.istft(spec, win_length=win_length,
+                            hop_length=hop_length, length=length)
         if i != num_iters - 1:
-            spec1 = librosa.stft(wav, n_fft=n_fft, win_length=win_length, hop_length=hop_length)
+            spec1 = librosa.stft(
+                wav, n_fft=n_fft, win_length=win_length, hop_length=hop_length)
             _, phase = librosa.magphase(spec1)
             phase_angle = np.angle(phase)
             spec = mag * np.exp(1.j * phase_angle)
@@ -354,6 +356,10 @@ if __name__ == '__main__':
 
         print(outputs[0].shape)
 
-        audio = spectrogram2wav(np.e**(outputs[0]).T, n_fft=hp.Default.n_fft, win_length=hp.Default.win_length, hop_length=hp.Default.hop_length, 
-            num_iters=hp.Default.n_iter)
-        librosa.output.write_wav("SA1_pred.wav",audio,hp.Default.sr,norm=True)
+        audio = spectrogram2wav(np.e**(outputs[0]).T, 
+                                n_fft=hp.Default.n_fft, 
+                                win_length=hp.Default.win_length, 
+                                hop_length=hp.Default.hop_length,
+                                num_iters=hp.Default.n_iter)
+        librosa.output.write_wav(
+            "SA1_pred.wav", audio, hp.Default.sr, norm=True)
