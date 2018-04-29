@@ -19,7 +19,6 @@ import matplotlib.pyplot as plt
 
 
 num_classes = 61
-
 num_mags = hp.Default.n_fft / 2 + 1
 num_mels = 80
 
@@ -368,6 +367,11 @@ def train():
     train_mags_std_dev = np.std(np.concatenate(all_train_mags).ravel())
     train_mels_mean = np.mean(np.concatenate(all_train_mels).ravel())
     train_mels_std_dev = np.std(np.concatenate(all_train_mels).ravel())
+
+    print(train_mags_mean)
+    print(train_mags_std_dev)
+    print(train_mels_mean)
+    print(train_mels_std_dev)
 
     # Load Test data completely (All 1680 samples, unpadded, uncropped)
     all_test_mags, all_test_mels, all_test_inputs = load_test_data()

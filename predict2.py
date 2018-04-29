@@ -19,7 +19,8 @@ import matplotlib.pyplot as plt
 
 
 num_classes = 61
-num_features = 40
+num_mels = 80
+num_mags = hp.Default.n_fft / 2 + 1
 
 
 # HYPER PARAMETERS
@@ -29,7 +30,7 @@ NUM_LAYERS = 2
 NUM_HIDDEN = 100
 LEARNING_RATE = 0.01
 NUM_EPOCHS = 50
-BATCH_SIZE = 100
+BATCH_SIZE = 40
 KEEP_PROB = 0.9
 
 SAVE_DIR = "./checkpoint2/save"
@@ -279,17 +280,21 @@ if __name__ == '__main__':
         # Input placeholder of shape [BATCH_SIZE, num_frames, num_phn_classes]
         inputs = tf.placeholder(tf.float32, [None, None, num_classes])
 
-        # Target placeholder of shape [BATCH_SIZE, num_frames, num__mfcc_features]
-        targets = tf.placeholder(tf.int32, [None, None, num_features])
+        # Target placeholder of shape [BATCH_SIZE, num_frames, num__mels]
+        target_mels = tf.placeholder(tf.int32, [None, None, num_mels])
+
+        # Target placeholder of shape [BATCH_SIZE, num_frames, num__mags]
+        target_mags = tf.placeholder(tf.int32, [None, None, num_mags])
 
         # List of sequence lengths (num_frames)
         seq_len = tf.placeholder(tf.int32, [None])
 
         keep_prob = tf.placeholder(tf.float32, shape=())
 
-        mean = tf.Variable(-3.643601, dtype=tf.float32)
-
-        std_dev = tf.Variable(2.283052, dtype=tf.float32)
+        mags_mean = tf.Variable(-3.643601, dtype=tf.float32)
+        mags_std_dev = tf.Variable(2.283052, dtype=tf.float32)
+        mels_mean = tf.Variable(-6.68732257325, dtype=tf.float32)
+        mels_std_dev = tf.Variable(2.15938492932, dtype=tf.float32)
 
         # Get a GRU cell with dropout for use in RNN
         def get_a_cell(gru_size, keep_prob=1.0):
@@ -299,51 +304,73 @@ if __name__ == '__main__':
             return drop
 
         # Make a multi layer RNN of NUM_LAYERS layers of cells
-        stack = tf.nn.rnn_cell.MultiRNNCell(
+        stack1 = tf.nn.rnn_cell.MultiRNNCell(
             [get_a_cell(NUM_HIDDEN, keep_prob) for _ in range(NUM_LAYERS)])
 
-        # outputs is the output of the RNN at each time step (frame)
-        # RNN has NUM_HIDDEN output nodes
-        # outputs has shape [BATCH_SIZE, num_frames, NUM_HIDDEN]
-        # The second output is the last state and we will not use that
-        (output_fw, output_bw), _ = tf.nn.bidirectional_dynamic_rnn(
-            stack, stack, inputs, seq_len, dtype=tf.float32)
-        outputs = tf.concat([output_fw, output_bw], axis=2)
+        (mel_output_fw, mel_output_bw), _ = tf.nn.bidirectional_dynamic_rnn(
+            stack1, stack1, inputs, seq_len, dtype=tf.float32)
+        mel_outputs = tf.concat([mel_output_fw, mel_output_bw], axis=2)
 
         # Save input shape for restoring later
         shape = tf.shape(inputs)
         batch_s, max_timesteps = shape[0], shape[1]
 
         # Reshaping to apply the same weights over the timesteps
-        # outputs is now of shape [BATCH_SIZE*num_frames, NUM_HIDDEN]
+        # mel_outputs is now of shape [BATCH_SIZE*num_frames, NUM_HIDDEN]
         # So the same weights are trained for each timestep of each sequence
-        outputs = tf.reshape(outputs, [-1, 2 * NUM_HIDDEN])
+        mel_outputs = tf.reshape(mel_outputs, [-1, 2 * NUM_HIDDEN])
 
         # Truncated normal with mean 0 and stdev=0.1
         # Tip: Try another initialization
-        # see https://www.tensorflow.org/versions/r0.9/api_docs/python/contrib.layers.html#initializers
-        W = tf.Variable(tf.truncated_normal([2 * NUM_HIDDEN,
-                                             num_features],
-                                            stddev=0.1))
+        W1 = tf.Variable(tf.truncated_normal([2 * NUM_HIDDEN,
+                                              num_mels],
+                                             stddev=0.1))
         # Zero initialization
-        b = tf.Variable(tf.constant(0., shape=[num_features]))
+        b1 = tf.Variable(tf.constant(0., shape=[num_mels]))
 
         # Doing the affine projection
-        predictions = tf.matmul(outputs, W) + b
+        mels_predictions = tf.matmul(mel_outputs, W1) + b1
 
         # Reshaping back to the original shape
-        predictions = tf.reshape(predictions, [batch_s, -1, num_features])
+        mels_predictions = tf.reshape(
+            mels_predictions, [batch_s, -1, num_mels])
 
-        scaled_predictions = predictions * std_dev + mean
+        scaled_mels_predictions = mels_predictions * mels_std_dev + mels_mean
 
-        # mse_loss = tf.reduce_mean(
-        #     tf.losses.mean_squared_error(
-        #         predictions=predictions, labels=targets))
-        # define an accuracy assessment operation
-        mse_loss = tf.losses.mean_squared_error(predictions, targets)
+        stack2 = tf.nn.rnn_cell.MultiRNNCell(
+            [get_a_cell(NUM_HIDDEN, keep_prob) for _ in range(NUM_LAYERS)])
+
+        (mag_output_fw, mag_output_bw), _ = tf.nn.bidirectional_dynamic_rnn(
+            stack2, stack2, mels_predictions, seq_len,
+            dtype=tf.float32, scope="bi_RNN2")
+        mag_outputs = tf.concat([mag_output_fw, mag_output_bw], axis=2)
+
+        mag_outputs = tf.reshape(mag_outputs, [-1, 2 * NUM_HIDDEN])
+
+        W2 = tf.Variable(tf.truncated_normal([2 * NUM_HIDDEN,
+                                              num_mags],
+                                             stddev=0.1))
+        # Zero initialization
+        b2 = tf.Variable(tf.constant(0., shape=[num_mags]))
+
+        # Doing the affine projection
+        mags_predictions = tf.matmul(mag_outputs, W2) + b2
+
+        # Reshaping back to the original shape
+        mags_predictions = tf.reshape(
+            mags_predictions, [batch_s, -1, num_mags])
+
+        scaled_mags_predictions = mags_predictions * mags_std_dev + mags_mean
+
+        mels_mse_loss = tf.losses.mean_squared_error(
+            mels_predictions, target_mels)
+        mags_mse_loss = tf.losses.mean_squared_error(
+            mags_predictions, target_mags)
+
+        total_mse_loss = mels_mse_loss + mags_mse_loss
 
         optimizer = tf.train.AdamOptimizer(
-            LEARNING_RATE).minimize(mse_loss)
+            LEARNING_RATE).minimize(total_mse_loss)
 
         # finally setup the initialisation operator
         init_op = tf.global_variables_initializer()
@@ -372,16 +399,21 @@ if __name__ == '__main__':
                 seq_len: predict_seq_len,
                 keep_prob: 1.0}
 
-        mfccs = sess.run(scaled_predictions, feed)[0]
+        output = sess.run(scaled_mags_predictions, feed)[0]
 
-        print(mfccs)
-        print(mfccs.shape)
+        print(output)
+        print(output.shape)
 
-        audio = _get_wav_from_mfccs(mfccs,
-                                    hp.Default.preemphasis,
-                                    hp.Default.n_fft,
-                                    hp.Default.win_length,
-                                    hp.Default.hop_length,
-                                    (len(mfccs) - 1) * hp.Default.hop_length)
+        # audio = _get_wav_from_mfccs(output,
+        #                             hp.Default.preemphasis,
+        #                             hp.Default.n_fft,
+        #                             hp.Default.win_length,
+        #                             hp.Default.hop_length,
+        #                             (len(output) - 1) * hp.Default.hop_length)
+
+        audio = spectrogram2wav(np.e**(output).T, n_fft=hp.Default.n_fft,
+                                win_length=hp.Default.win_length,
+                                hop_length=hp.Default.hop_length,
+                                num_iters=hp.Default.n_iter)
         librosa.output.write_wav(
             "SA1_pred.wav", audio, hp.Default.sr, norm=True)

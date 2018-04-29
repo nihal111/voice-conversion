@@ -19,7 +19,6 @@ import matplotlib.pyplot as plt
 
 
 num_classes = 61
-num_features = 40
 num_mags = hp.Default.n_fft/2+1
 
 # HYPER PARAMETERS
