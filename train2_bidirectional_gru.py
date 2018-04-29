@@ -56,7 +56,7 @@ def annotate_min(x, y, ax=None):
     if not ax:
         ax = plt.gca()
     bbox_props = dict(boxstyle="square,pad=0.3", fc="w", ec="k", lw=0.72)
-    plt.annotate(text, xy=(0.75, 0.8),
+    plt.annotate(text, xy=(0.80, 0.85),
                  xycoords='axes fraction', bbox=bbox_props)
 
 
