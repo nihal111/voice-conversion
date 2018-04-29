@@ -25,10 +25,10 @@ num_mags = hp.Default.n_fft/2+1
 # HYPER PARAMETERS
 TRAIN_CAP = 1000
 TEST_CAP = 500
-NUM_LAYERS = 1
+NUM_LAYERS = 2
 NUM_HIDDEN = 100
 LEARNING_RATE = 0.01
-NUM_EPOCHS = 50
+NUM_EPOCHS = 100
 BATCH_SIZE = 100
 KEEP_PROB = 0.9
 
@@ -171,14 +171,14 @@ def get_mags_and_phones(wav_file, sr, trim=False, random_crop=False, length=int(
 
 def load_test_data(phn_file):
     phn2idx, idx2phn = load_vocab()
-    phns = np.zeros(shape=(100000,))
+    phns = np.zeros(shape=(1000,))
     bnd_list = []
     for line in open(phn_file, 'r').read().splitlines():
         start_point, end_point, phn = line.split()
         bnd = int(start_point) // hp.Default.hop_length
         phns[bnd:] = phn2idx[phn]
         bnd_list.append(bnd)
-    phns = phns[:int(end_point)]
+    phns = phns[:(int(end_point) // hp.Default.hop_length)]
     return np.array([phns])
 
 
@@ -230,8 +230,8 @@ def spectrogram2wav(mag, n_fft, win_length, hop_length, num_iters, phase_angle=N
     for i in range(num_iters):
         wav = librosa.istft(spec, win_length=win_length, hop_length=hop_length, length=length)
         if i != num_iters - 1:
-            spec = librosa.stft(wav, n_fft=n_fft, win_length=win_length, hop_length=hop_length)
-            _, phase = librosa.magphase(spec)
+            spec1 = librosa.stft(wav, n_fft=n_fft, win_length=win_length, hop_length=hop_length)
+            _, phase = librosa.magphase(spec1)
             phase_angle = np.angle(phase)
             spec = mag * np.exp(1.j * phase_angle)
     return deemphasis(wav)
@@ -254,9 +254,9 @@ if __name__ == '__main__':
 
         keep_prob = tf.placeholder(tf.float32, shape=())
 
-        mean = tf.get_variable("mean", shape=(), initializer=tf.ones_initializer)
+        mean = tf.Variable(-3.643601)
 
-        std_dev = tf.get_variable("std_dev", shape=(), initializer=tf.ones_initializer)
+        std_dev = tf.Variable(2.283052)
 
         # Get a GRU cell with dropout for use in RNN
         def get_a_cell(gru_size, keep_prob=1.0):
@@ -341,7 +341,8 @@ if __name__ == '__main__':
 
         outputs = sess.run(scaled_predictions, feed)
 
+        print(outputs[0].shape)
 
-        audio = spectrogram2wav(np.e**(outputs[0]), n_fft=hp.Default.n_fft, win_length=hp.Default.win_length, hop_length=hp.Default.hop_length, 
+        audio = spectrogram2wav(np.e**(outputs[0]).T, n_fft=hp.Default.n_fft, win_length=hp.Default.win_length, hop_length=hp.Default.hop_length, 
             num_iters=hp.Default.n_iter)
         librosa.output.write_wav("SA1_pred.wav",audio,hp.Default.sr,norm=True)

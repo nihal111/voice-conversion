@@ -58,18 +58,23 @@ def spectrogram2wav(mag, n_fft, win_length, hop_length, num_iters, phase_angle=N
     if phase_angle is None:
         phase_angle = np.pi * np.random.rand(*mag.shape)
     spec = mag * np.exp(1.j * phase_angle)
+    print("\nspec:"+str(spec.shape))
     for i in range(num_iters):
         wav = librosa.istft(spec, win_length=win_length, hop_length=hop_length, length=length)
+        print("wav:"+str(wav.shape))
         if i != num_iters - 1:
             spec = librosa.stft(wav, n_fft=n_fft, win_length=win_length, hop_length=hop_length)
+            print("spec:"+str(spec.shape))
             _, phase = librosa.magphase(spec)
+            print("phase:"+str(phase.shape))
             phase_angle = np.angle(phase)
+            print("phase_angle:"+str(phase_angle.shape))
             spec = mag * np.exp(1.j * phase_angle)
+            print("spec:"+str(spec.shape))
     return deemphasis(wav)
 
 def _get_wav_from_mfccs(mfccs, preemphasis_coeff, n_fft, win_length, hop_length, n_wav):
 	dctm = librosa.filters.dct(hp.Default.n_mfcc, hp.Default.n_mels)
-	print (np.dot(dctm.T,dctm))
 	mel_basis = librosa.filters.mel(hp.Default.sr, hp.Default.n_fft, hp.Default.n_mels)
 	#bin_scaling = 1.0/np.maximum(0.0005, np.sum(np.dot(mel_basis.T, mel_basis),axis=0))
 	mel_db = np.dot(dctm.T,mfccs.T)
@@ -89,6 +94,8 @@ wav, sr = librosa.load(wav_file, sr=hp.Default.sr)
 mfccs, mag, _ = _get_mfcc_log_spec_and_log_mel_spec(wav, hp.Default.preemphasis, hp.Default.n_fft,
                                                       hp.Default.win_length,
                                                       hp.Default.hop_length)
+print(mag)
+print (mag.shape)
 audio = _get_wav_from_mfccs(mfccs, hp.Default.preemphasis, hp.Default.n_fft, hp.Default.win_length, hp.Default.hop_length,len(wav))
 audio2 = spectrogram2wav((np.e**mag).T, hp.Default.n_fft, hp.Default.win_length, hp.Default.hop_length, hp.Default.n_iter)
 librosa.output.write_wav("recon2.wav",audio2,hp.Default.sr,norm=True)

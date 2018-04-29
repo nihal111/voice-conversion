@@ -344,8 +344,6 @@ def train():
 
     train_mean = np.mean(np.concatenate(all_train_targets).ravel())
     train_std_dev = np.std(np.concatenate(all_train_targets).ravel())
-    print(train_mean)
-    print(train_std_dev)
 
     # Load Test data completely (All 1680 samples, unpadded, uncropped)
     all_test_targets, all_test_inputs = load_test_data()
@@ -525,7 +523,7 @@ def train():
 if __name__ == '__main__':
     args = get_arguments()
     params_arr = [
-        {'nh': 100, 'nl': 1, 'epochs': 50, 'batch_size': 100, 'keep_prob': 0.9}
+        {'nh': 100, 'nl': 5, 'epochs': 100, 'batch_size': 20, 'keep_prob': 0.9}
     ]
     for params in params_arr:
         set_parameters(**params)
