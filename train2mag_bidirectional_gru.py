@@ -342,8 +342,10 @@ def train():
     # Load Train data completely (All 4620 samples, unpadded, uncropped)
     all_train_targets, all_train_inputs = load_train_data()
 
-    train_mean = np.mean([np.mean(x) for x in all_train_targets])
-    train_std_dev = np.std([np.std(x) for x in all_train_targets])
+    train_mean = np.mean(np.concatenate(all_train_targets).ravel())
+    train_std_dev = np.std(np.concatenate(all_train_targets).ravel())
+    print(train_mean)
+    print(train_std_dev)
 
     # Load Test data completely (All 1680 samples, unpadded, uncropped)
     all_test_targets, all_test_inputs = load_test_data()
