@@ -104,62 +104,7 @@ def _get_mfcc_log_spec_and_log_mel_spec(wav, preemphasis_coeff, n_fft, win_lengt
     return mfccs.T, mag.T, mel.T  # (t, n_mfccs), (t, 1+n_fft/2), (t, n_mels)
 
 
-def get_mfccs_and_phones(wav_file, sr, trim=False, random_crop=True, length=int(hp.Default.duration / hp.Default.frame_shift + 1)):
-    '''
-    This is applied in `train1` or `test1` phase.
-
-    args:
-    wav_file - wave filename
-    sr - sampling ratio
-    trim - remove 0th index from mfccs[] and phns[]
-    random_crop - retrieve a `length` segment from a random starting point
-    length - used with `random_crop`
-    '''
-
-    # Load
-    wav, sr = librosa.load(wav_file, sr=sr)
-
-    mfccs, _, _ = _get_mfcc_log_spec_and_log_mel_spec(wav, hp.Default.preemphasis, hp.Default.n_fft,
-                                                      hp.Default.win_length,
-                                                      hp.Default.hop_length)
-    # timesteps
-    num_timesteps = mfccs.shape[0]
-
-    # phones (targets)
-    phn_file = wav_file.replace("WAV.wav", "PHN").replace("WAV", "PHN")
-    phn2idx, idx2phn = load_vocab()
-    phns = np.zeros(shape=(num_timesteps,))
-    bnd_list = []
-    for line in open(phn_file, 'r').read().splitlines():
-        start_point, _, phn = line.split()
-        bnd = int(start_point) // hp.Default.hop_length
-        phns[bnd:] = phn2idx[phn]
-        bnd_list.append(bnd)
-
-    # Trim
-    if trim:
-        start, end = bnd_list[1], bnd_list[-1]
-        mfccs = mfccs[start:end]
-        phns = phns[start:end]
-        assert (len(mfccs) == len(phns))
-
-    # Random crop
-    if random_crop:
-        start = np.random.choice(
-            range(np.maximum(1, len(mfccs) - length)), 1)[0]
-        end = start + length
-        mfccs = mfccs[start:end]
-        phns = phns[start:end]
-        assert (len(mfccs) == len(phns))
-
-    # Padding or crop
-    mfccs = librosa.util.fix_length(mfccs, length, axis=0)
-    phns = librosa.util.fix_length(phns, length, axis=0)
-
-    return mfccs, phns
-
-
-def load_train_data(wav_file):
+def load_test_data(wav_file):
     mfccs, _, _ = _get_mfcc_log_spec_and_log_mel_spec(wav_file, hp.Default.preemphasis, hp.Default.n_fft,
                                                       hp.Default.win_length,
                                                       hp.Default.hop_length)
@@ -267,7 +212,7 @@ if __name__ == '__main__':
             exit()
 
         wav, sr = librosa.load(predict_file, sr=hp.Default.sr)
-        predict_inputs = load_train_data(wav)
+        predict_inputs = load_test_data(wav)
 
         predict_inputs = (predict_inputs - np.mean(predict_inputs)) / \
             np.std(predict_inputs)
