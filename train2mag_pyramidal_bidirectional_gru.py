@@ -20,21 +20,17 @@ import matplotlib.pyplot as plt
 
 num_classes = 61
 num_mags = hp.Default.n_fft / 2 + 1
-num_mels = 80
-
 
 # HYPER PARAMETERS
-LAYERS1 = [65, 75]
-LAYERS2 = [140, 200]
-NUM_HIDDEN1 = 75
-NUM_HIDDEN2 = 200
+TRAIN_CAP = TEST_CAP = 50
+LAYERS = [140, 200]
+NUM_HIDDEN = 200
 LEARNING_RATE = 0.01
 NUM_EPOCHS = 50
-BATCH_SIZE = 20
-KEEP_PROB = 0.6
-TRAIN_CAP = TEST_CAP = 100
+BATCH_SIZE = 5
+KEEP_PROB = 1.0
 
-SAVE_DIR = "./checkpoint2/save_pyramidal"
+SAVE_DIR = "./checkpoint2/save"
 PLOTTING = True
 
 SAVE_PER_EPOCHS = 1
@@ -45,8 +41,8 @@ def initialise_plot():
     plt.ion()
     plt.show()
     plt.gcf().clear()
-    plt.title('L1={} L2={} LR={} BS={} KP={}'.format(
-        str(LAYERS1).replace(" ",""), str(LAYERS2).replace(" ",""), LEARNING_RATE, BATCH_SIZE, KEEP_PROB))
+    plt.title('NH={} L={} LR={} BS={} KP={}'.format(
+        NUM_HIDDEN, LAYERS, LEARNING_RATE, BATCH_SIZE, KEEP_PROB))
     plt.xlabel('Epoch')
     plt.ylabel('Mean Square Error')
 
@@ -58,7 +54,7 @@ def annotate_min(x, y, ax=None):
     if not ax:
         ax = plt.gca()
     bbox_props = dict(boxstyle="square,pad=0.3", fc="w", ec="k", lw=0.72)
-    plt.annotate(text, xy=(0.80, 0.85),
+    plt.annotate(text, xy=(0.75, 0.8),
                  xycoords='axes fraction', bbox=bbox_props)
 
 
@@ -80,8 +76,8 @@ def plot_graph(train_accuracy, test_accuracy):
 
 
 def save_plot():
-    plt.savefig('./images2/bigru_{}_{}_{}_{}_{}.png'.format(
-        str(LAYERS1).replace(" ",""), str(LAYERS2).replace(" ",""), LEARNING_RATE, BATCH_SIZE, KEEP_PROB),
+    plt.savefig('./images2/bigru_{}_{}_{}_{}.png'.format(
+        NUM_HIDDEN, LEARNING_RATE, BATCH_SIZE, KEEP_PROB),
         bbox_inches='tight')
 
 
@@ -111,8 +107,7 @@ def load_vocab():
     return phn2idx, idx2phn
 
 
-def get_mfcc_log_spec_and_log_mel_spec(wav, preemphasis_coeff,
-                                       n_fft, win_length, hop_length):
+def _get_mfcc_log_spec_and_log_mel_spec(wav, preemphasis_coeff, n_fft, win_length, hop_length):
     '''
     Args:
     wav - Wave object loaded using librosa
@@ -150,7 +145,7 @@ def get_mfcc_log_spec_and_log_mel_spec(wav, preemphasis_coeff,
     return mfccs.T, mag.T, mel.T  # (t, n_mfccs), (t, 1+n_fft/2), (t, n_mels)
 
 
-def get_mags_mels_and_phones(wav_file, sr, trim=False, random_crop=False, length=int(hp.Default.duration / hp.Default.frame_shift + 1)):
+def get_mags_and_phones(wav_file, sr, trim=False, random_crop=False, length=int(hp.Default.duration / hp.Default.frame_shift + 1)):
     '''
     This is applied in `train1` or `test1` phase.
 
@@ -165,13 +160,11 @@ def get_mags_mels_and_phones(wav_file, sr, trim=False, random_crop=False, length
     # Load
     wav, sr = librosa.load(wav_file, sr=sr)
 
-    _, mags, mels = get_mfcc_log_spec_and_log_mel_spec(wav,
-                                                       hp.Default.preemphasis,
-                                                       hp.Default.n_fft,
-                                                       hp.Default.win_length,
-                                                       hp.Default.hop_length)
+    _, mags, _ = _get_mfcc_log_spec_and_log_mel_spec(wav, hp.Default.preemphasis, hp.Default.n_fft,
+                                                     hp.Default.win_length,
+                                                     hp.Default.hop_length)
     # timesteps
-    num_timesteps = mels.shape[0]
+    num_timesteps = mags.shape[0]
 
     # phones (targets)
     phn_file = wav_file.replace("wav", "lab")
@@ -190,15 +183,12 @@ def get_mags_mels_and_phones(wav_file, sr, trim=False, random_crop=False, length
 
     # Replace pau with h# for consistency with TIMIT
     phns[phns == 44.] = 0.
-
     # Trim
     if trim:
         start, end = bnd_list[1], bnd_list[-1]
         mags = mags[start:end]
-        mels = mels[start:end]
         phns = phns[start:end]
         assert (len(mags) == len(phns))
-        assert (len(mels) == len(phns))
 
     # # Random crop
     # if random_crop:
@@ -212,31 +202,27 @@ def get_mags_mels_and_phones(wav_file, sr, trim=False, random_crop=False, length
     # # Padding or crop
     # mfccs = librosa.util.fix_length(mfccs, length, axis=0)
     # phns = librosa.util.fix_length(phns, length, axis=0)
-    return mags, mels, phns
+    return mags, phns
 
 
 def load_train_data():
     wav_files = sorted(glob.glob(hp.Train2.data_path))
     x = []
     y = []
-    z = []
-    if os.path.isfile(hp.Train2.npz_file_path):
-        with np.load(hp.Train2.npz_file_path) as data:
+    if os.path.isfile(hp.Train2.mag_npz_file_path):
+        with np.load(hp.Train2.mag_npz_file_path) as data:
             x = data['mags']
-            y = data['mels']
-            z = data['phns']
+            y = data['phns']
     else:
         for i in xrange(len(wav_files)):
-            mags, mels, phns = get_mags_mels_and_phones(
-                wav_files[i], hp.Default.sr)
+            mags, phns = get_mags_and_phones(wav_files[i], hp.Default.sr)
             x.append(mags)
-            y.append(mels)
-            z.append(phns)
+            y.append(phns)
             print("File {}".format(i))
-        with open(hp.Train2.npz_file_path, 'wb') as fp:
-            np.savez_compressed(fp, mags=x, mels=y, phns=z)
+        with open(hp.Train2.mag_npz_file_path, 'wb') as fp:
+            np.savez_compressed(fp, mags=x, phns=y)
 
-    print("Loaded mfccs and phns from TRAIN data")
+    print("Loaded mags and phns from TRAIN data")
 
     # # Shuffle
     # idx = np.arange(0, len(x))
@@ -244,31 +230,27 @@ def load_train_data():
     # idx = idx[:TRAIN_CAP]
     # x_shuffle = [x[i] for i in idx]
     # y_shuffle = [y[i] for i in idx]
-    return np.asarray(x), np.asarray(y), np.asarray(z)
+    return np.asarray(x), np.asarray(y)
 
 
 def load_test_data():
     wav_files = sorted(glob.glob(hp.Test2.data_path))
     x = []
     y = []
-    z = []
-    if os.path.isfile(hp.Test2.npz_file_path):
-        with np.load(hp.Test2.npz_file_path) as data:
+    if os.path.isfile(hp.Test2.mag_npz_file_path):
+        with np.load(hp.Test2.mag_npz_file_path) as data:
             x = data['mags']
-            y = data['mels']
-            z = data['phns']
+            y = data['phns']
     else:
         for i in xrange(len(wav_files)):
-            mags, mels, phns = get_mags_mels_and_phones(
-                wav_files[i], hp.Default.sr)
+            mags, phns = get_mags_and_phones(wav_files[i], hp.Default.sr)
             x.append(mags)
-            y.append(mels)
-            z.append(phns)
+            y.append(phns)
             print("File {}".format(i))
-        with open(hp.Test2.npz_file_path, 'wb') as fp:
-            np.savez_compressed(fp, mags=x, mels=y, phns=z)
+        with open(hp.Test2.mag_npz_file_path, 'wb') as fp:
+            np.savez_compressed(fp, mags=x, phns=y)
 
-    print("Loaded mfccs and phns from TEST data")
+    print("Loaded mags and phns from TEST data")
 
     # # Shuffle
     # idx = np.arange(0, len(x))
@@ -276,44 +258,39 @@ def load_test_data():
     # idx = idx[:TEST_CAP]
     # x_shuffle = [x[i] for i in idx]
     # y_shuffle = [y[i] for i in idx]
-    return np.asarray(x), np.asarray(y), np.asarray(z)
+    return np.asarray(x), np.asarray(y)
 
 
-def sample_data(mags_array, mels_array, phns_array):
+def sample_data(mags_array, phns_array):
 
     length = int(hp.Default.duration / hp.Default.frame_shift + 1)
 
     for i in range(len(mags_array)):
         mags = mags_array[i]
-        mels = mels_array[i]
         phns = phns_array[i]
         # Random crop
         start = np.random.choice(
             range(np.maximum(1, len(mags) - length)), 1)[0]
         end = start + length
         mags = mags[start:end]
-        mels = mels[start:end]
         phns = phns[start:end]
         assert (len(mags) == len(phns))
 
         # Padding or crop
         mags = librosa.util.fix_length(mags, length, axis=0)
-        mels = librosa.util.fix_length(mels, length, axis=0)
         phns = librosa.util.fix_length(phns, length, axis=0)
 
         mags_array[i], phns_array[i] = mags, phns
-        mels_array[i], phns_array[i] = mels, phns
-    return np.asarray(mags_array), np.asarray(mels_array), \
-        np.asarray(phns_array)
+    return np.asarray(mags_array), np.asarray(phns_array)
 
 
 def get_arguments():
     parser = argparse.ArgumentParser()
     optional = parser.add_argument_group('hyperparams')
-    # optional.add_argument('--nh', type=int, required=False,
-    #                       help='number of hidden nodes')
-    # optional.add_argument('--nl', type=int, required=False,
-    #                       help='number of lstm layers')
+    optional.add_argument('--nh', type=int, required=False,
+                          help='number of hidden nodes')
+    optional.add_argument('--nl', type=int, required=False,
+                          help='number of lstm layers')
     optional.add_argument('--epochs', type=int, required=False,
                           help='number of epochs')
     optional.add_argument('--batch_size', type=int,
@@ -327,7 +304,7 @@ def get_arguments():
     return arguments
 
 
-def next_batch(num, inputs, outputs1, outputs2):
+def next_batch(num, inputs, outputs):
     '''
     Return a total of `num` random samples and labels.
     inputs is phns and outputs is mfccs
@@ -335,25 +312,22 @@ def next_batch(num, inputs, outputs1, outputs2):
     idx = np.arange(0, len(inputs))
     np.random.shuffle(idx)
     idx = idx[:num]
-    outputs1_shuffle = [outputs1[i] for i in idx]
-    outputs2_shuffle = [outputs2[i] for i in idx]
+    outputs_shuffle = [outputs[i] for i in idx]
     inputs_shuffle = np.asarray([one_hot(inputs[i]) for i in idx])
     train_seq_len = [len(x) for x in inputs_shuffle]
-    return inputs_shuffle, outputs1_shuffle, outputs2_shuffle, train_seq_len
+    return inputs_shuffle, outputs_shuffle, train_seq_len
 
 
 def one_hot(indices, depth=num_classes):
-    one_hot_labels = np.zeros((len(indices), depth), dtype=int)
+    one_hot_labels = np.zeros((len(indices), depth))
     one_hot_labels[np.arange(len(indices)), indices] = 1
     return one_hot_labels
 
 
-def set_parameters(layers1, layers2, epochs, batch_size, keep_prob):
-    global NUM_HIDDEN1, NUM_HIDDEN2, LAYERS1, LAYERS2, NUM_EPOCHS, BATCH_SIZE, KEEP_PROB
-    NUM_HIDDEN1 = layers1[-1]
-    LAYERS1 = layers1
-    NUM_HIDDEN2 = layers2[-1]
-    LAYERS2 = layers2
+def set_parameters(nl, epochs, batch_size, keep_prob):
+    global NUM_HIDDEN, LAYERS, NUM_EPOCHS, BATCH_SIZE, KEEP_PROB
+    NUM_HIDDEN = nl[-1]
+    LAYERS = nl
     NUM_EPOCHS = epochs
     BATCH_SIZE = batch_size
     KEEP_PROB = keep_prob
@@ -362,41 +336,30 @@ def set_parameters(layers1, layers2, epochs, batch_size, keep_prob):
 def train():
 
     # Load Train data completely (All 4620 samples, unpadded, uncropped)
-    all_train_mags, all_train_mels, all_train_inputs = load_train_data()
+    all_train_targets, all_train_inputs = load_train_data()
 
-    train_mags_mean = np.mean(np.concatenate(all_train_mags).ravel())
-    train_mags_std_dev = np.std(np.concatenate(all_train_mags).ravel())
-    train_mels_mean = np.mean(np.concatenate(all_train_mels).ravel())
-    train_mels_std_dev = np.std(np.concatenate(all_train_mels).ravel())
-
-    print(train_mags_mean)
-    print(train_mags_std_dev)
-    print(train_mels_mean)
-    print(train_mels_std_dev)
+    train_mean = np.mean(np.concatenate(all_train_targets).ravel())
+    train_std_dev = np.std(np.concatenate(all_train_targets).ravel())
 
     # Load Test data completely (All 1680 samples, unpadded, uncropped)
-    all_test_mags, all_test_mels, all_test_inputs = load_test_data()
+    all_test_targets, all_test_inputs = load_test_data()
 
     graph = tf.Graph()
     with graph.as_default():
         # Input placeholder of shape [BATCH_SIZE, num_frames, num_phn_classes]
         inputs = tf.placeholder(tf.float32, [None, None, num_classes])
 
-        # Target placeholder of shape [BATCH_SIZE, num_frames, num__mels]
-        target_mels = tf.placeholder(tf.float32, [None, None, num_mels])
-
-        # Target placeholder of shape [BATCH_SIZE, num_frames, num__mags]
-        target_mags = tf.placeholder(tf.float32, [None, None, num_mags])
+        # Target placeholder of shape [BATCH_SIZE, num_frames, num__mfcc_features]
+        targets = tf.placeholder(tf.int32, [None, None, num_mags])
 
         # List of sequence lengths (num_frames)
         seq_len = tf.placeholder(tf.int32, [None])
 
         keep_prob = tf.placeholder(tf.float32, shape=())
 
-        mags_mean = tf.Variable(train_mags_mean, dtype=tf.float32)
-        mags_std_dev = tf.Variable(train_mags_std_dev, dtype=tf.float32)
-        mels_mean = tf.Variable(train_mels_mean, dtype=tf.float32)
-        mels_std_dev = tf.Variable(train_mels_std_dev, dtype=tf.float32)
+        mean = tf.Variable(train_mean)
+
+        std_dev = tf.Variable(train_std_dev)
 
         # Get a GRU cell with dropout for use in RNN
         def get_a_cell(gru_size, keep_prob=1.0):
@@ -405,82 +368,59 @@ def train():
                 gru, output_keep_prob=keep_prob)
             return drop
 
-        # Make a multi layer RNN of LAYERS layers of cells
-        stack1 = tf.nn.rnn_cell.MultiRNNCell(
-            [get_a_cell(num_hidden, keep_prob) for num_hidden in LAYERS1])
+        # Make a multi layer RNN of NUM_LAYERS layers of cells
+        stack = tf.nn.rnn_cell.MultiRNNCell(
+            [get_a_cell(num_hidden, keep_prob) for num_hidden in LAYERS])
 
-        (mel_output_fw, mel_output_bw), _ = tf.nn.bidirectional_dynamic_rnn(
-            stack1, stack1, inputs, seq_len, dtype=tf.float32)
-        mel_outputs = tf.concat([mel_output_fw, mel_output_bw], axis=2)
+        # outputs is the output of the RNN at each time step (frame)
+        # RNN has NUM_HIDDEN output nodes
+        # outputs has shape [BATCH_SIZE, num_frames, NUM_HIDDEN]
+        # The second output is the last state and we will not use that
+        (output_fw, output_bw), _ = tf.nn.bidirectional_dynamic_rnn(
+            stack, stack, inputs, seq_len, dtype=tf.float32)
+        outputs = tf.concat([output_fw, output_bw], axis=2)
 
         # Save input shape for restoring later
         shape = tf.shape(inputs)
         batch_s, max_timesteps = shape[0], shape[1]
 
         # Reshaping to apply the same weights over the timesteps
-        # mel_outputs is now of shape [BATCH_SIZE*num_frames, NUM_HIDDEN]
+        # outputs is now of shape [BATCH_SIZE*num_frames, NUM_HIDDEN]
         # So the same weights are trained for each timestep of each sequence
-        mel_outputs = tf.reshape(mel_outputs, [-1, 2 * NUM_HIDDEN1])
+        outputs = tf.reshape(outputs, [-1, 2 * NUM_HIDDEN])
 
         # Truncated normal with mean 0 and stdev=0.1
         # Tip: Try another initialization
-        W1 = tf.Variable(tf.truncated_normal([2 * NUM_HIDDEN1,
-                                              num_mels],
-                                             stddev=0.1))
+        W = tf.Variable(tf.truncated_normal([2 * NUM_HIDDEN,
+                                             num_mags],
+                                            stddev=0.1))
         # Zero initialization
-        b1 = tf.Variable(tf.constant(0., shape=[num_mels]))
+        b = tf.Variable(tf.constant(0., shape=[num_mags]))
 
         # Doing the affine projection
-        mels_predictions = tf.matmul(mel_outputs, W1) + b1
+        predictions = tf.matmul(outputs, W) + b
 
         # Reshaping back to the original shape
-        mels_predictions = tf.reshape(
-            mels_predictions, [batch_s, -1, num_mels])
+        predictions = tf.reshape(predictions, [batch_s, -1, num_mags])
 
-        scaled_mels_predictions = mels_predictions * mels_std_dev + mels_mean
+        scaled_predictions = predictions * std_dev + mean
 
-        stack2 = tf.nn.rnn_cell.MultiRNNCell(
-            [get_a_cell(num_hidden, keep_prob) for num_hidden in LAYERS2])
-
-        (mag_output_fw, mag_output_bw), _ = tf.nn.bidirectional_dynamic_rnn(
-            stack2, stack2, mels_predictions, seq_len,
-            dtype=tf.float32, scope="bi_RNN2")
-        mag_outputs = tf.concat([mag_output_fw, mag_output_bw], axis=2)
-
-        mag_outputs = tf.reshape(mag_outputs, [-1, 2 * NUM_HIDDEN2])
-
-        W2 = tf.Variable(tf.truncated_normal([2 * NUM_HIDDEN2,
-                                              num_mags],
-                                             stddev=0.1))
-        # Zero initialization
-        b2 = tf.Variable(tf.constant(0., shape=[num_mags]))
-
-        # Doing the affine projection
-        mags_predictions = tf.matmul(mag_outputs, W2) + b2
-
-        # Reshaping back to the original shape
-        mags_predictions = tf.reshape(
-            mags_predictions, [batch_s, -1, num_mags])
-
-        scaled_mags_predictions = mags_predictions * mags_std_dev + mags_mean
-
-        mels_mse_loss = tf.losses.mean_squared_error(
-            mels_predictions, target_mels)
-        mags_mse_loss = tf.losses.mean_squared_error(
-            mags_predictions, target_mags)
-
-        total_mse_loss = mels_mse_loss + mags_mse_loss
+        # mse_loss = tf.reduce_mean(
+        #     tf.losses.mean_squared_error(
+        #         predictions=predictions, labels=targets))
+        # define an accuracy assessment operation
+        mse_loss = tf.losses.mean_squared_error(predictions, targets)
 
         optimizer = tf.train.AdamOptimizer(
-            LEARNING_RATE).minimize(total_mse_loss)
+            LEARNING_RATE).minimize(mse_loss)
 
         # finally setup the initialisation operator
         init_op = tf.global_variables_initializer()
 
     with tf.Session(graph=graph) as sess:
         saver = tf.train.Saver()
-        SAVE_PATH = SAVE_DIR + '_bigru_{}_{}/model.ckpt'.format(
-            BATCH_SIZE, KEEP_PROB)
+        SAVE_PATH = SAVE_DIR + '_mag_bigru_{}_{}_{}_{}/model.ckpt'.format(
+            NUM_HIDDEN, LEARNING_RATE, BATCH_SIZE, KEEP_PROB)
         try:
             saver.restore(sess, SAVE_PATH)
             print("Model restored.\n")
@@ -500,47 +440,38 @@ def train():
 
             if (epoch % RESAMPLE_PER_EPOCHS == 0 or epoch == 1):
                 # sample_data returns mfccs,phns
-                train_mags, train_mels, train_inputs = sample_data(
-                    all_train_mags, all_train_mels, all_train_inputs)
-                train_mags = np.array(list(train_mags))
-                train_mels = np.array(list(train_mels))
+                train_targets, train_inputs = sample_data(
+                    all_train_targets, all_train_inputs)
+                train_targets = np.array(list(train_targets))
                 train_inputs = np.array(list(train_inputs))
 
                 train_inputs = train_inputs.astype(int)
-                train_mags = (train_mags - train_mags_mean) / \
-                    train_mags_std_dev
-                train_mels = (train_mels - train_mels_mean) / \
-                    train_mels_std_dev
+
+                train_targets = (train_targets - train_mean) / train_std_dev
 
                 num_examples = len(train_inputs)
 
-                test_mags, test_mels, test_inputs = sample_data(
-                    all_test_mags, all_test_mels, all_test_inputs)
+                test_targets, test_inputs = sample_data(
+                    all_test_targets, all_test_inputs)
 
-                test_mags = np.array(list(test_mags))
-                test_mels = np.array(list(test_mels))
+                test_targets = np.array(list(test_targets))
                 test_inputs = np.array(list(test_inputs))
 
                 test_inputs = test_inputs.astype(int)
-                test_mags = (test_mags - train_mags_mean) / \
-                    train_mags_std_dev
-                test_mels = (test_mels - train_mels_mean) / \
-                    train_mels_std_dev
+                test_targets = (test_targets - train_mean) / train_std_dev
                 print("Re-sampled data (2sec of every wav)")
 
             for batch in range(int(num_examples / BATCH_SIZE)):
 
-                batch_x, batch_y_mags, batch_y_mels, \
-                    batch_seq_len = next_batch(
-                        BATCH_SIZE, train_inputs, train_mags, train_mels)
+                batch_x, batch_y, batch_seq_len = next_batch(
+                    BATCH_SIZE, train_inputs, train_targets)
 
                 feed = {inputs: batch_x,
-                        target_mels: batch_y_mels,
-                        target_mags: batch_y_mags,
+                        targets: batch_y,
                         seq_len: batch_seq_len,
                         keep_prob: KEEP_PROB}
 
-                batch_cost, _ = sess.run([total_mse_loss, optimizer], feed)
+                batch_cost, _ = sess.run([mse_loss, optimizer], feed)
                 train_cost += batch_cost * BATCH_SIZE
 
             train_cost /= num_examples
@@ -551,27 +482,21 @@ def train():
                 save_path = saver.save(sess, SAVE_PATH)
                 print("Model saved in path: %s" % save_path)
 
-                batch_x, batch_y_mags, batch_y_mels, \
-                    batch_seq_len = next_batch(
-                        TRAIN_CAP, train_inputs,
-                        train_mags, train_mels)
+                batch_x, batch_y, batch_seq_len = next_batch(
+                    TRAIN_CAP, train_inputs, train_targets)
 
-                train_err = sess.run(total_mse_loss, feed_dict={
+                train_err = sess.run(mse_loss, feed_dict={
                     inputs: batch_x,
-                    target_mels: batch_y_mels,
-                    target_mags: batch_y_mags,
+                    targets: batch_y,
                     seq_len: batch_seq_len,
                     keep_prob: 1.0})
 
-                batch_x, batch_y_mags, batch_y_mels, \
-                    batch_seq_len = next_batch(
-                        TEST_CAP, test_inputs,
-                        test_mags, test_mels)
+                batch_x, batch_y, batch_seq_len = next_batch(
+                    TEST_CAP, test_inputs, test_targets)
 
-                test_err = sess.run(total_mse_loss, feed_dict={
+                test_err = sess.run(mse_loss, feed_dict={
                     inputs: batch_x,
-                    target_mels: batch_y_mels,
-                    target_mags: batch_y_mags,
+                    targets: batch_y,
                     seq_len: batch_seq_len,
                     keep_prob: 1.0})
 
@@ -593,12 +518,7 @@ def train():
 if __name__ == '__main__':
     args = get_arguments()
     params_arr = [
-        {'layers1': [65, 75], 'layers2':[140, 200], 'epochs': 50,
-            'batch_size': 20, 'keep_prob': 0.6},
-        {'layers1': [65, 75], 'layers2':[140, 200], 'epochs': 50,
-            'batch_size': 20, 'keep_prob': 0.8},
-        {'layers1': [64, 128], 'layers2':[256, 512], 'epochs': 50,
-            'batch_size': 5, 'keep_prob': 0.7}
+        {'nl': [100, 150, 200], 'epochs': 30, 'batch_size': 25, 'keep_prob': 0.6}
     ]
     for params in params_arr:
         set_parameters(**params)

@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 
 num_classes = 61
 num_features = 40
-num_mags = hp.Default.n_fft/2+1
+num_mags = hp.Default.n_fft / 2 + 1
 
 # HYPER PARAMETERS
 TRAIN_CAP = 1000
@@ -163,8 +163,8 @@ def get_mags_and_phones(wav_file, sr, trim=False, random_crop=False, length=int(
     wav, sr = librosa.load(wav_file, sr=sr)
 
     _, mags, _ = _get_mfcc_log_spec_and_log_mel_spec(wav, hp.Default.preemphasis, hp.Default.n_fft,
-                                                      hp.Default.win_length,
-                                                      hp.Default.hop_length)
+                                                     hp.Default.win_length,
+                                                     hp.Default.hop_length)
     # timesteps
     num_timesteps = mags.shape[0]
 
