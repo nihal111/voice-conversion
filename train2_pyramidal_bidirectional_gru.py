@@ -599,11 +599,11 @@ def train():
 if __name__ == '__main__':
     args = get_arguments()
     params_arr = [
-        {'layers1': [65, 75], 'layers2':[140, 200], 'epochs': 100,
+        {'layers1': [65, 75], 'layers2':[140, 200], 'epochs': 50,
             'batch_size': 20, 'keep_prob': 0.6},
-        {'layers1': [65, 75], 'layers2':[140, 200], 'epochs': 100,
+        {'layers1': [65, 75], 'layers2':[140, 200], 'epochs': 50,
             'batch_size': 20, 'keep_prob': 0.8},
-        {'layers1': [64, 128], 'layers2':[256, 512], 'epochs': 100,
+        {'layers1': [64, 128], 'layers2':[256, 512], 'epochs': 50,
             'batch_size': 5, 'keep_prob': 0.7}
     ]
     for params in params_arr:

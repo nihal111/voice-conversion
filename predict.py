@@ -27,11 +27,13 @@ num_features = 40
 # HYPER PARAMETERS
 TRAIN_CAP = 1000
 TEST_CAP = 500
-NUM_LAYERS = 4
-NUM_HIDDEN = 100
+NUM_LAYERS = 3
+NUM_HIDDEN = 150
 LEARNING_RATE = 0.01
 NUM_EPOCHS = 50
-BATCH_SIZE = 75
+BATCH_SIZE = 50
+KEEP_PROB = 0.6
+
 
 SAVE_DIR = "./checkpoint/save"
 PLOTTING = True
@@ -137,26 +139,25 @@ def predict_phonemes(predict_file):
         # List of sequence lengths (num_frames)
         seq_len = tf.placeholder(tf.int32, [None])
 
+        keep_prob = tf.placeholder(tf.float32, shape=())
+
         # Get a GRU cell with dropout for use in RNN
         def get_a_cell(gru_size, keep_prob=1.0):
-            gru = tf.nn.rnn_cell.GRUCell(gru_size)
+            gru = tf.nn.rnn_cell.BasicLSTMCell(gru_size)
             drop = tf.nn.rnn_cell.DropoutWrapper(
                 gru, output_keep_prob=keep_prob)
             return drop
 
         # Make a multi layer RNN of NUM_LAYERS layers of cells
-        stack_fw = tf.nn.rnn_cell.MultiRNNCell(
-            [get_a_cell(NUM_HIDDEN) for _ in range(NUM_LAYERS)])
-
-        stack_bw = tf.nn.rnn_cell.MultiRNNCell(
-            [get_a_cell(NUM_HIDDEN) for _ in range(NUM_LAYERS)])
+        stack = tf.nn.rnn_cell.MultiRNNCell(
+            [get_a_cell(NUM_HIDDEN, keep_prob) for _ in range(NUM_LAYERS)])
 
         # outputs is the output of the RNN at each time step (frame)
         # RNN has NUM_HIDDEN output nodes
         # outputs has shape [BATCH_SIZE, num_frames, NUM_HIDDEN]
         # The second output is the last state and we will not use that
         (output_fw, output_bw), _ = tf.nn.bidirectional_dynamic_rnn(
-            stack_fw, stack_bw, inputs, seq_len, dtype=tf.float32)
+            stack, stack, inputs, seq_len, dtype=tf.float32)
         outputs = tf.concat([output_fw, output_bw], axis=2)
 
         # Save input shape for restoring later
@@ -215,17 +216,20 @@ def predict_phonemes(predict_file):
         wav, sr = librosa.load(predict_file, sr=hp.Default.sr)
         predict_inputs = load_test_data(wav)
 
-        predict_inputs = (predict_inputs - np.mean(predict_inputs)) / \
-            np.std(predict_inputs)
+        predict_inputs = (predict_inputs - 26.4842046909) / \
+            19.3570720935
 
         num_examples = len(predict_inputs)
 
         predict_seq_len = [len(x) for x in predict_inputs]
 
         feed = {inputs: predict_inputs,
-                seq_len: predict_seq_len}
+                seq_len: predict_seq_len,
+                keep_prob: 1.0}
 
         outputs = sess.run(logits, feed)
+
+        outputs = [np.argmax(out, axis=1) for out in outputs]
 
         return outputs
 
@@ -235,16 +239,16 @@ if __name__ == '__main__':
     predict_file = args.predict_file
 
     outputs = predict_phonemes(predict_file)
+    print(outputs)
 
-    for out in outputs:
-        phns = np.argmax(out, axis=1)
-        phn2idx, idx2phn = load_vocab()
-        phns = [idx2phn[x] for x in phns]
-        print(phns)
-        # prev = 'a'
-        # string = ''
-        # for phn in phns:
-        #     if phn != prev:
-        #         string += phn + ' '
-        #         prev = phn
-        # print(string)
+    phn2idx, idx2phn = load_vocab()
+    phns = [idx2phn[x] for x in outputs[0]]
+    # prev = 'a'
+    # string = ''
+    # for phn in phns:
+    #     if phn != prev:
+    #         string += phn + ' '
+    #         prev = phn
+    # print(string)
+
+    print(phns)

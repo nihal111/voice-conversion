@@ -421,6 +421,7 @@ if __name__ == '__main__':
     predict_file = args.predict_file
 
     predict_inputs = load_test_data(predict_file)
+    print(predict_inputs)
     output = predict_mags(predict_inputs)
     print(output.shape)
 

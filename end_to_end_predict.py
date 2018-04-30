@@ -1,5 +1,5 @@
 import argparse
-from predict import predict_phonemes
+from predict import predict_phonemes, load_vocab
 from predict2 import predict_mags, converter
 
 
@@ -15,5 +15,6 @@ if __name__ == '__main__':
     predict_file = args.input_file
 
     outputs = predict_phonemes(predict_file)
+    print(outputs)
     outputs = predict_mags(outputs)
     converter(outputs, "end2end.wav")

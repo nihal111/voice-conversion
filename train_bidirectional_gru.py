@@ -30,7 +30,7 @@ NUM_HIDDEN = 100
 LEARNING_RATE = 0.01
 NUM_EPOCHS = 50
 BATCH_SIZE = 75
-KEEP_PROB = 0.8
+KEEP_PROB = 0.6
 
 SAVE_DIR = "./checkpoint/save"
 PLOTTING = True
@@ -340,6 +340,9 @@ def train():
     train_mean = np.mean(np.concatenate(all_train_targets).ravel())
     train_std_dev = np.std(np.concatenate(all_train_targets).ravel())
 
+    print(train_mean)
+    print(train_std_dev)
+
     # Load Test data completely (All 1680 samples, unpadded, uncropped)
     all_test_inputs, all_test_targets = load_test_data()
 
@@ -358,16 +361,13 @@ def train():
 
         # Get a GRU cell with dropout for use in RNN
         def get_a_cell(gru_size, keep_prob=1.0):
-            gru = tf.nn.rnn_cell.GRUCell(gru_size)
+            gru = tf.nn.rnn_cell.BasicLSTMCell(gru_size)
             drop = tf.nn.rnn_cell.DropoutWrapper(
                 gru, output_keep_prob=keep_prob)
             return drop
 
         # Make a multi layer RNN of NUM_LAYERS layers of cells
-        stack_fw = tf.nn.rnn_cell.MultiRNNCell(
-            [get_a_cell(NUM_HIDDEN, keep_prob) for _ in range(NUM_LAYERS)])
-
-        stack_bw = tf.nn.rnn_cell.MultiRNNCell(
+        stack = tf.nn.rnn_cell.MultiRNNCell(
             [get_a_cell(NUM_HIDDEN, keep_prob) for _ in range(NUM_LAYERS)])
 
         # outputs is the output of the RNN at each time step (frame)
@@ -375,7 +375,7 @@ def train():
         # outputs has shape [BATCH_SIZE, num_frames, NUM_HIDDEN]
         # The second output is the last state and we will not use that
         (output_fw, output_bw), _ = tf.nn.bidirectional_dynamic_rnn(
-            stack_fw, stack_bw, inputs, seq_len, dtype=tf.float32)
+            stack, stack, inputs, seq_len, dtype=tf.float32)
         outputs = tf.concat([output_fw, output_bw], axis=2)
 
         # Save input shape for restoring later
@@ -520,7 +520,7 @@ def train():
 
 if __name__ == '__main__':
     args = get_arguments()
-    params_arr = [{'nh': 100, 'nl': 3, 'epochs': 50, 'batch_size': 100, 'keep_prob': 0.8}]
+    params_arr = [{'nh': 150, 'nl': 3, 'epochs': 50, 'batch_size': 50, 'keep_prob': 0.6}]
     for params in params_arr:
         set_parameters(**params)
         train()

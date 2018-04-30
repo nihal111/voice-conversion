@@ -507,10 +507,7 @@ def train():
 
 if __name__ == '__main__':
     args = get_arguments()
-    params_arr = [{'nh': 100, 'nl': 2, 'epochs': 50, 'batch_size': 100},
-                  {'nh': 75, 'nl': 3, 'epochs': 50, 'batch_size': 100},
-                  {'nh': 100, 'nl': 3, 'epochs': 50, 'batch_size': 100},
-                  {'nh': 75, 'nl': 4, 'epochs': 50, 'batch_size': 100}]
+    params_arr = [{'nh': 125, 'nl': 3, 'epochs': 50, 'batch_size': 50}]
     for params in params_arr:
         set_parameters(**params)
         train()
