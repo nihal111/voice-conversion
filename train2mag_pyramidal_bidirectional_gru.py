@@ -363,7 +363,7 @@ def train():
 
         # Get a GRU cell with dropout for use in RNN
         def get_a_cell(gru_size, keep_prob=1.0):
-            gru = tf.nn.rnn_cell.GRUCell(gru_size)
+            gru = tf.nn.rnn_cell.BasicLSTMCell(gru_size)
             drop = tf.nn.rnn_cell.DropoutWrapper(
                 gru, output_keep_prob=keep_prob)
             return drop
@@ -518,7 +518,7 @@ def train():
 if __name__ == '__main__':
     args = get_arguments()
     params_arr = [
-        {'nl': [61, 124, 257], 'epochs': 30, 'batch_size': 25, 'keep_prob': 0.6}
+        {'nl': [100, 150, 200], 'epochs': 50, 'batch_size': 25, 'keep_prob': 0.6}
     ]
     for params in params_arr:
         set_parameters(**params)
