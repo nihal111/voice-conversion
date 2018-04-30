@@ -45,7 +45,7 @@ class Train1:
 
 class Train2:
     # path
-    data_path = '{}/arctic/bdl/arctic_a*.wav'.format(
+    data_path = '{}/arctic/slt/arctic_a*.wav'.format(
         data_path_base)
     npz_file_path = 'arctic_train_files.npz'
     mag_npz_file_path = 'arctic_train_files_mag.npz'
@@ -78,7 +78,7 @@ class Test1:
 
 class Test2:
     # test
-    data_path = '{}/arctic/bdl/arctic_b*.wav'.format(data_path_base)
+    data_path = '{}/arctic/slt/arctic_b*.wav'.format(data_path_base)
     npz_file_path = 'arctic_test_files.npz'
     mag_npz_file_path = 'arctic_test_files_mag.npz'
     batch_size = 32
