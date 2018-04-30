@@ -24,16 +24,16 @@ num_mags = hp.Default.n_fft / 2 + 1
 
 
 # HYPER PARAMETERS
-TRAIN_CAP = 1000
-TEST_CAP = 500
-NUM_LAYERS = 2
-NUM_HIDDEN = 100
+LAYERS1 = [65, 75]
+LAYERS2 = [140, 200]
+NUM_HIDDEN1 = 75
+NUM_HIDDEN2 = 200
 LEARNING_RATE = 0.01
 NUM_EPOCHS = 50
-BATCH_SIZE = 40
-KEEP_PROB = 0.9
+BATCH_SIZE = 20
+KEEP_PROB = 0.6
 
-SAVE_DIR = "./checkpoint2/save"
+SAVE_DIR = "./checkpoint2/save_pyramidal"
 PLOTTING = True
 
 SAVE_PER_EPOCHS = 1
@@ -272,10 +272,7 @@ def _get_wav_from_mfccs(mfccs, preemphasis_coeff, n_fft, win_length, hop_length,
     return recon
 
 
-if __name__ == '__main__':
-    args = get_arguments()
-    predict_file = args.predict_file
-
+def predict_mags(predict_inputs):
     graph = tf.Graph()
     with graph.as_default():
         # Input placeholder of shape [BATCH_SIZE, num_frames, num_phn_classes]
@@ -304,12 +301,15 @@ if __name__ == '__main__':
                 gru, output_keep_prob=keep_prob)
             return drop
 
-        # Make a multi layer RNN of NUM_LAYERS layers of cells
-        stack1 = tf.nn.rnn_cell.MultiRNNCell(
-            [get_a_cell(NUM_HIDDEN, keep_prob) for _ in range(NUM_LAYERS)])
+        # Make a multi layer RNN of LAYERS layers of cells
+        stack1_fw = tf.nn.rnn_cell.MultiRNNCell(
+            [get_a_cell(num_hidden, keep_prob) for num_hidden in LAYERS1])
+
+        stack1_bw = tf.nn.rnn_cell.MultiRNNCell(
+            [get_a_cell(num_hidden, keep_prob) for num_hidden in LAYERS1])
 
         (mel_output_fw, mel_output_bw), _ = tf.nn.bidirectional_dynamic_rnn(
-            stack1, stack1, inputs, seq_len, dtype=tf.float32)
+            stack1_fw, stack1_bw, inputs, seq_len, dtype=tf.float32)
         mel_outputs = tf.concat([mel_output_fw, mel_output_bw], axis=2)
 
         # Save input shape for restoring later
@@ -319,11 +319,11 @@ if __name__ == '__main__':
         # Reshaping to apply the same weights over the timesteps
         # mel_outputs is now of shape [BATCH_SIZE*num_frames, NUM_HIDDEN]
         # So the same weights are trained for each timestep of each sequence
-        mel_outputs = tf.reshape(mel_outputs, [-1, 2 * NUM_HIDDEN])
+        mel_outputs = tf.reshape(mel_outputs, [-1, 2 * NUM_HIDDEN1])
 
         # Truncated normal with mean 0 and stdev=0.1
         # Tip: Try another initialization
-        W1 = tf.Variable(tf.truncated_normal([2 * NUM_HIDDEN,
+        W1 = tf.Variable(tf.truncated_normal([2 * NUM_HIDDEN1,
                                               num_mels],
                                              stddev=0.1))
         # Zero initialization
@@ -338,17 +338,20 @@ if __name__ == '__main__':
 
         scaled_mels_predictions = mels_predictions * mels_std_dev + mels_mean
 
-        stack2 = tf.nn.rnn_cell.MultiRNNCell(
-            [get_a_cell(NUM_HIDDEN, keep_prob) for _ in range(NUM_LAYERS)])
+        stack2_fw = tf.nn.rnn_cell.MultiRNNCell(
+            [get_a_cell(num_hidden, keep_prob) for num_hidden in LAYERS2])
+
+        stack2_bw = tf.nn.rnn_cell.MultiRNNCell(
+            [get_a_cell(num_hidden, keep_prob) for num_hidden in LAYERS2])
 
         (mag_output_fw, mag_output_bw), _ = tf.nn.bidirectional_dynamic_rnn(
-            stack2, stack2, mels_predictions, seq_len,
+            stack2_fw, stack2_bw, mels_predictions, seq_len,
             dtype=tf.float32, scope="bi_RNN2")
         mag_outputs = tf.concat([mag_output_fw, mag_output_bw], axis=2)
 
-        mag_outputs = tf.reshape(mag_outputs, [-1, 2 * NUM_HIDDEN])
+        mag_outputs = tf.reshape(mag_outputs, [-1, 2 * NUM_HIDDEN2])
 
-        W2 = tf.Variable(tf.truncated_normal([2 * NUM_HIDDEN,
+        W2 = tf.Variable(tf.truncated_normal([2 * NUM_HIDDEN2,
                                               num_mags],
                                              stddev=0.1))
         # Zero initialization
@@ -378,8 +381,8 @@ if __name__ == '__main__':
 
     with tf.Session(graph=graph) as sess:
         saver = tf.train.Saver()
-        SAVE_PATH = SAVE_DIR + '_bigru_{}_{}_{}_{}_{}/model.ckpt'.format(
-            NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE, KEEP_PROB)
+        SAVE_PATH = SAVE_DIR + '_bigru_{}_{}/model.ckpt'.format(
+            BATCH_SIZE, KEEP_PROB)
         try:
             saver.restore(sess, SAVE_PATH)
             print("Model restored.\n")
@@ -388,7 +391,6 @@ if __name__ == '__main__':
             sess.run(init_op)
             print("Model initialised.\n")
 
-        predict_inputs = load_test_data(predict_file)
         predict_inputs = np.array(predict_inputs).astype(int)
 
         predict_inputs = np.asarray([one_hot(x) for x in predict_inputs])
@@ -402,19 +404,31 @@ if __name__ == '__main__':
 
         output = sess.run(scaled_mags_predictions, feed)[0]
 
-        print(output)
-        print(output.shape)
+        return output
 
-        # audio = _get_wav_from_mfccs(output,
-        #                             hp.Default.preemphasis,
-        #                             hp.Default.n_fft,
-        #                             hp.Default.win_length,
-        #                             hp.Default.hop_length,
-        #                             (len(output) - 1) * hp.Default.hop_length)
 
-        audio = spectrogram2wav(np.e**(output).T, n_fft=hp.Default.n_fft,
-                                win_length=hp.Default.win_length,
-                                hop_length=hp.Default.hop_length,
-                                num_iters=hp.Default.n_iter)
-        librosa.output.write_wav(
-            "SA1_pred.wav", audio, hp.Default.sr, norm=True)
+def converter(output, filename):
+    audio = spectrogram2wav(np.e**(output).T, n_fft=hp.Default.n_fft,
+                            win_length=hp.Default.win_length,
+                            hop_length=hp.Default.hop_length,
+                            num_iters=hp.Default.n_iter)
+    librosa.output.write_wav(
+        filename, audio, hp.Default.sr, norm=True)
+
+
+if __name__ == '__main__':
+    args = get_arguments()
+    predict_file = args.predict_file
+
+    predict_inputs = load_test_data(predict_file)
+    output = predict_mags(predict_inputs)
+    print(output.shape)
+
+    # audio = _get_wav_from_mfccs(output,
+    #                             hp.Default.preemphasis,
+    #                             hp.Default.n_fft,
+    #                             hp.Default.win_length,
+    #                             hp.Default.hop_length,
+    #                             (len(output) - 1) * hp.Default.hop_length)
+
+    converter(output, "out.wav")

@@ -30,8 +30,8 @@ NUM_HIDDEN1 = 75
 NUM_HIDDEN2 = 200
 LEARNING_RATE = 0.01
 NUM_EPOCHS = 50
-BATCH_SIZE = 100
-KEEP_PROB = 0.9
+BATCH_SIZE = 20
+KEEP_PROB = 0.6
 TRAIN_CAP = TEST_CAP = 100
 
 SAVE_DIR = "./checkpoint2/save_pyramidal"
@@ -46,7 +46,7 @@ def initialise_plot():
     plt.show()
     plt.gcf().clear()
     plt.title('L1={} L2={} LR={} BS={} KP={}'.format(
-        LAYERS1, LAYERS2, LEARNING_RATE, BATCH_SIZE, KEEP_PROB))
+        str(LAYERS1).replace(" ",""), str(LAYERS2).replace(" ",""), LEARNING_RATE, BATCH_SIZE, KEEP_PROB))
     plt.xlabel('Epoch')
     plt.ylabel('Mean Square Error')
 
@@ -81,7 +81,7 @@ def plot_graph(train_accuracy, test_accuracy):
 
 def save_plot():
     plt.savefig('./images2/bigru_{}_{}_{}_{}_{}.png'.format(
-        LAYERS1, LAYERS2, LEARNING_RATE, BATCH_SIZE, KEEP_PROB),
+        str(LAYERS1).replace(" ",""), str(LAYERS2).replace(" ",""), LEARNING_RATE, BATCH_SIZE, KEEP_PROB),
         bbox_inches='tight')
 
 
@@ -485,8 +485,8 @@ def train():
 
     with tf.Session(graph=graph) as sess:
         saver = tf.train.Saver()
-        SAVE_PATH = SAVE_DIR + '_bigru_{}_{}_{}_{}_{}/model.ckpt'.format(
-            LAYERS1, LAYERS2, LEARNING_RATE, BATCH_SIZE, KEEP_PROB)
+        SAVE_PATH = SAVE_DIR + '_bigru_{}_{}/model.ckpt'.format(
+            BATCH_SIZE, KEEP_PROB)
         try:
             saver.restore(sess, SAVE_PATH)
             print("Model restored.\n")
@@ -599,8 +599,12 @@ def train():
 if __name__ == '__main__':
     args = get_arguments()
     params_arr = [
-        {'layers1': [65, 75], 'layers2':[140, 200], 'epochs': 50,
-            'batch_size': 20, 'keep_prob': 0.8}
+        {'layers1': [65, 75], 'layers2':[140, 200], 'epochs': 100,
+            'batch_size': 20, 'keep_prob': 0.6},
+        {'layers1': [65, 75], 'layers2':[140, 200], 'epochs': 100,
+            'batch_size': 20, 'keep_prob': 0.8},
+        {'layers1': [64, 128], 'layers2':[256, 512], 'epochs': 100,
+            'batch_size': 5, 'keep_prob': 0.7}
     ]
     for params in params_arr:
         set_parameters(**params)

@@ -27,11 +27,11 @@ num_features = 40
 # HYPER PARAMETERS
 TRAIN_CAP = 1000
 TEST_CAP = 500
-num_layers = 4
-num_hidden = 100
-learning_rate = 0.01
-num_epochs = 50
-batch_size = 75
+NUM_LAYERS = 4
+NUM_HIDDEN = 100
+LEARNING_RATE = 0.01
+NUM_EPOCHS = 50
+BATCH_SIZE = 75
 
 SAVE_DIR = "./checkpoint/save"
 PLOTTING = True
@@ -125,7 +125,7 @@ def one_hot(indices, depth=num_classes):
     return one_hot_labels
 
 
-def predict_phonemes():
+def predict_phonemes(predict_file):
     graph = tf.Graph()
     with graph.as_default():
         # Input placeholder of shape [BATCH_SIZE, num_frames, num_mfcc_features]
@@ -201,11 +201,10 @@ def predict_phonemes():
         # finally setup the initialisation operator
         init_op = tf.global_variables_initializer()
 
-
     with tf.Session(graph=graph) as sess:
         saver = tf.train.Saver()
         SAVE_PATH = SAVE_DIR + '_{}_{}_{}_{}/model.ckpt'.format(
-            num_hidden, num_layers, learning_rate, batch_size)
+            NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE)
         try:
             saver.restore(sess, SAVE_PATH)
             print("Model restored.\n")
@@ -231,12 +230,11 @@ def predict_phonemes():
         return outputs
 
 
-
 if __name__ == '__main__':
     args = get_arguments()
     predict_file = args.predict_file
 
-    outputs = predict_phonemes()
+    outputs = predict_phonemes(predict_file)
 
     for out in outputs:
         phns = np.argmax(out, axis=1)
