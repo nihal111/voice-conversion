@@ -23,8 +23,7 @@ num_features = 40
 
 
 # HYPER PARAMETERS
-TRAIN_CAP = 500
-TEST_CAP = 500
+TRAIN_CAP = TEST_CAP = 50
 NUM_LAYERS = 4
 NUM_HIDDEN = 100
 LEARNING_RATE = 0.01
@@ -361,7 +360,7 @@ def train():
 
         # Get a GRU cell with dropout for use in RNN
         def get_a_cell(gru_size, keep_prob=1.0):
-            gru = tf.nn.rnn_cell.BasicLSTMCell(gru_size)
+            gru = tf.nn.rnn_cell.GRUCell(gru_size)
             drop = tf.nn.rnn_cell.DropoutWrapper(
                 gru, output_keep_prob=keep_prob)
             return drop
@@ -422,7 +421,7 @@ def train():
 
     with tf.Session(graph=graph) as sess:
         saver = tf.train.Saver()
-        SAVE_PATH = SAVE_DIR + '_{}_{}_{}_{}/model.ckpt'.format(
+        SAVE_PATH = SAVE_DIR + '_bigru_{}_{}_{}_{}/model.ckpt'.format(
             NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE)
         try:
             saver.restore(sess, SAVE_PATH)
@@ -520,7 +519,9 @@ def train():
 
 if __name__ == '__main__':
     args = get_arguments()
-    params_arr = [{'nh': 150, 'nl': 3, 'epochs': 50, 'batch_size': 50, 'keep_prob': 0.6}]
+    params_arr = [{'nh': 200, 'nl': 2, 'epochs': 20, 'batch_size': 25, 'keep_prob': 0.6},
+                  {'nh': 200, 'nl': 3, 'epochs': 20, 'batch_size': 25, 'keep_prob': 0.6},
+                  {'nh': 200, 'nl': 4, 'epochs': 20, 'batch_size': 25, 'keep_prob': 0.6}]
     for params in params_arr:
         set_parameters(**params)
         train()

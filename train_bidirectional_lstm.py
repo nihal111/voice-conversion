@@ -23,13 +23,13 @@ num_features = 40
 
 
 # HYPER PARAMETERS
-TRAIN_CAP = 1000
-TEST_CAP = 500
-NUM_LAYERS = 3
+TRAIN_CAP = TEST_CAP = 50
+NUM_LAYERS = 4
 NUM_HIDDEN = 100
 LEARNING_RATE = 0.01
-NUM_EPOCHS = 40
-BATCH_SIZE = 100
+NUM_EPOCHS = 50
+BATCH_SIZE = 75
+KEEP_PROB = 0.6
 
 SAVE_DIR = "./checkpoint/save"
 PLOTTING = True
@@ -42,8 +42,8 @@ def initialise_plot():
     plt.ion()
     plt.show()
     plt.gcf().clear()
-    plt.title('NH={} NL={} LR={} BS={}'.format(
-        NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE))
+    plt.title('NH={} NL={} LR={} BS={} KP={}'.format(
+        NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE, KEEP_PROB))
     plt.xlabel('Epoch')
     plt.ylabel('Accuracy')
 
@@ -51,7 +51,7 @@ def initialise_plot():
 def annotate_max(x, y, ax=None):
     xmax = (x[np.argmax(y)] + 1) * SAVE_PER_EPOCHS
     ymax = y.max()
-    text = "Max accuracy\nEpoch={}, Accuracy={:.3f}".format(xmax, ymax)
+    text = "Max accuracy\nEpoch={}\nAccuracy={:.3f}".format(xmax, ymax)
     if not ax:
         ax = plt.gca()
     bbox_props = dict(boxstyle="square,pad=0.3", fc="w", ec="k", lw=0.72)
@@ -77,8 +77,8 @@ def plot_graph(train_accuracy, test_accuracy):
 
 
 def save_plot():
-    plt.savefig('./images/{}_{}_{}_{}.png'.format(
-        NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE),
+    plt.savefig('./images/{}_{}_{}_{}_{}.png'.format(
+        NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE, KEEP_PROB),
         bbox_inches='tight')
 
 
@@ -322,18 +322,25 @@ def one_hot(indices, depth=num_classes):
     return one_hot_labels
 
 
-def set_parameters(nh, nl, epochs, batch_size):
+def set_parameters(nh, nl, epochs, batch_size, keep_prob):
     global NUM_HIDDEN, NUM_LAYERS, NUM_EPOCHS, BATCH_SIZE
     NUM_HIDDEN = nh
     NUM_LAYERS = nl
     NUM_EPOCHS = epochs
     BATCH_SIZE = batch_size
+    KEEP_PROB = keep_prob
 
 
 def train():
 
     # Load Train data completely (All 4620 samples, unpadded, uncropped)
     all_train_inputs, all_train_targets = load_train_data()
+
+    train_mean = np.mean(np.concatenate(all_train_targets).ravel())
+    train_std_dev = np.std(np.concatenate(all_train_targets).ravel())
+
+    print(train_mean)
+    print(train_std_dev)
 
     # Load Test data completely (All 1680 samples, unpadded, uncropped)
     all_test_inputs, all_test_targets = load_test_data()
@@ -349,7 +356,9 @@ def train():
         # List of sequence lengths (num_frames)
         seq_len = tf.placeholder(tf.int32, [None])
 
-        # Get a basic LSTM cell with dropout for use in RNN
+        keep_prob = tf.placeholder(tf.float32, shape=())
+
+        # Get a LSTM cell with dropout for use in RNN
         def get_a_cell(lstm_size, keep_prob=1.0):
             lstm = tf.nn.rnn_cell.BasicLSTMCell(lstm_size)
             drop = tf.nn.rnn_cell.DropoutWrapper(
@@ -358,7 +367,7 @@ def train():
 
         # Make a multi layer RNN of NUM_LAYERS layers of cells
         stack = tf.nn.rnn_cell.MultiRNNCell(
-            [get_a_cell(NUM_HIDDEN) for _ in range(NUM_LAYERS)])
+            [get_a_cell(NUM_HIDDEN, keep_prob) for _ in range(NUM_LAYERS)])
 
         # outputs is the output of the RNN at each time step (frame)
         # RNN has NUM_HIDDEN output nodes
@@ -412,7 +421,7 @@ def train():
 
     with tf.Session(graph=graph) as sess:
         saver = tf.train.Saver()
-        SAVE_PATH = SAVE_DIR + '_{}_{}_{}_{}/model.ckpt'.format(
+        SAVE_PATH = SAVE_DIR + '_lstm_{}_{}_{}_{}/model.ckpt'.format(
             NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE)
         try:
             saver.restore(sess, SAVE_PATH)
@@ -438,8 +447,8 @@ def train():
                 train_inputs = np.array(list(train_inputs))
 
                 train_targets = train_targets.astype(int)
-                train_inputs = (train_inputs - np.mean(train_inputs)) / \
-                    np.std(train_inputs)
+                train_inputs = (train_inputs - train_mean) / \
+                    train_std_dev
 
                 num_examples = len(train_targets)
 
@@ -450,8 +459,8 @@ def train():
                 test_inputs = np.array(list(test_inputs))
 
                 test_targets = test_targets.astype(int)
-                test_inputs = (test_inputs - np.mean(test_inputs)) / \
-                    np.std(test_inputs)
+                test_inputs = (test_inputs - train_mean) / \
+                    train_std_dev
                 print("Re-sampled data (2sec of every wav)")
 
             for batch in range(int(num_examples / BATCH_SIZE)):
@@ -461,7 +470,8 @@ def train():
 
                 feed = {inputs: batch_x,
                         targets: batch_y,
-                        seq_len: batch_seq_len}
+                        seq_len: batch_seq_len,
+                        keep_prob: KEEP_PROB}
 
                 batch_cost, _ = sess.run([cross_entropy, optimizer], feed)
                 train_cost += batch_cost * BATCH_SIZE
@@ -480,7 +490,8 @@ def train():
                 train_acc = sess.run(accuracy, feed_dict={
                     inputs: batch_x,
                     targets: batch_y,
-                    seq_len: batch_seq_len})
+                    seq_len: batch_seq_len,
+                    keep_prob: 1.0})
 
                 batch_x, batch_y, batch_seq_len = next_batch(
                     TEST_CAP, test_inputs, test_targets)
@@ -488,7 +499,8 @@ def train():
                 test_acc = sess.run(accuracy, feed_dict={
                     inputs: batch_x,
                     targets: batch_y,
-                    seq_len: batch_seq_len})
+                    seq_len: batch_seq_len,
+                    keep_prob: 1.0})
 
                 log = "\nEpoch {}/{}, train_cost = {:.3f}, " + \
                     "train_acc = {:.3f}, test_acc = {:.3f} time = {:.3f}\n"
@@ -507,7 +519,9 @@ def train():
 
 if __name__ == '__main__':
     args = get_arguments()
-    params_arr = [{'nh': 125, 'nl': 3, 'epochs': 50, 'batch_size': 50}]
+    params_arr = [{'nh': 200, 'nl': 2, 'epochs': 20, 'batch_size': 25, 'keep_prob': 0.6},
+                  {'nh': 200, 'nl': 3, 'epochs': 20, 'batch_size': 25, 'keep_prob': 0.6},
+                  {'nh': 200, 'nl': 4, 'epochs': 20, 'batch_size': 25, 'keep_prob': 0.6}]
     for params in params_arr:
         set_parameters(**params)
         train()
