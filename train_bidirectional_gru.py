@@ -23,13 +23,14 @@ num_features = 40
 
 
 # HYPER PARAMETERS
-TRAIN_CAP = 1000
+TRAIN_CAP = 500
 TEST_CAP = 500
 NUM_LAYERS = 4
 NUM_HIDDEN = 100
 LEARNING_RATE = 0.01
 NUM_EPOCHS = 50
 BATCH_SIZE = 75
+KEEP_PROB = 0.8
 
 SAVE_DIR = "./checkpoint/save"
 PLOTTING = True
@@ -322,12 +323,13 @@ def one_hot(indices, depth=num_classes):
     return one_hot_labels
 
 
-def set_parameters(nh, nl, epochs, batch_size):
+def set_parameters(nh, nl, epochs, batch_size, keep_prob):
     global NUM_HIDDEN, NUM_LAYERS, NUM_EPOCHS, BATCH_SIZE
     NUM_HIDDEN = nh
     NUM_LAYERS = nl
     NUM_EPOCHS = epochs
     BATCH_SIZE = batch_size
+    KEEP_PROB = keep_prob
 
 
 def train():
@@ -352,6 +354,8 @@ def train():
         # List of sequence lengths (num_frames)
         seq_len = tf.placeholder(tf.int32, [None])
 
+        keep_prob = tf.placeholder(tf.float32, shape=())
+
         # Get a GRU cell with dropout for use in RNN
         def get_a_cell(gru_size, keep_prob=1.0):
             gru = tf.nn.rnn_cell.GRUCell(gru_size)
@@ -361,10 +365,10 @@ def train():
 
         # Make a multi layer RNN of NUM_LAYERS layers of cells
         stack_fw = tf.nn.rnn_cell.MultiRNNCell(
-            [get_a_cell(NUM_HIDDEN) for _ in range(NUM_LAYERS)])
+            [get_a_cell(NUM_HIDDEN, keep_prob) for _ in range(NUM_LAYERS)])
 
         stack_bw = tf.nn.rnn_cell.MultiRNNCell(
-            [get_a_cell(NUM_HIDDEN) for _ in range(NUM_LAYERS)])
+            [get_a_cell(NUM_HIDDEN, keep_prob) for _ in range(NUM_LAYERS)])
 
         # outputs is the output of the RNN at each time step (frame)
         # RNN has NUM_HIDDEN output nodes
@@ -467,7 +471,8 @@ def train():
 
                 feed = {inputs: batch_x,
                         targets: batch_y,
-                        seq_len: batch_seq_len}
+                        seq_len: batch_seq_len,
+                        keep_prob: KEEP_PROB}
 
                 batch_cost, _ = sess.run([cross_entropy, optimizer], feed)
                 train_cost += batch_cost * BATCH_SIZE
@@ -486,7 +491,8 @@ def train():
                 train_acc = sess.run(accuracy, feed_dict={
                     inputs: batch_x,
                     targets: batch_y,
-                    seq_len: batch_seq_len})
+                    seq_len: batch_seq_len,
+                    keep_prob: 1.0})
 
                 batch_x, batch_y, batch_seq_len = next_batch(
                     TEST_CAP, test_inputs, test_targets)
@@ -494,7 +500,8 @@ def train():
                 test_acc = sess.run(accuracy, feed_dict={
                     inputs: batch_x,
                     targets: batch_y,
-                    seq_len: batch_seq_len})
+                    seq_len: batch_seq_len,
+                    keep_prob: 1.0})
 
                 log = "\nEpoch {}/{}, train_cost = {:.3f}, " + \
                     "train_acc = {:.3f}, test_acc = {:.3f} time = {:.3f}\n"
@@ -513,7 +520,7 @@ def train():
 
 if __name__ == '__main__':
     args = get_arguments()
-    params_arr = [{'nh': 100, 'nl': 4, 'epochs': 50, 'batch_size': 75}]
+    params_arr = [{'nh': 150, 'nl': 3, 'epochs': 50, 'batch_size': 50, 'keep_prob': 0.8}]
     for params in params_arr:
         set_parameters(**params)
         train()
