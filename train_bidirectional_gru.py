@@ -43,8 +43,8 @@ def initialise_plot():
     plt.ion()
     plt.show()
     plt.gcf().clear()
-    plt.title('NH={} NL={} LR={} BS={}'.format(
-        NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE))
+    plt.title('NH={} NL={} LR={} BS={} KP={}'.format(
+        NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE, KEEP_PROB))
     plt.xlabel('Epoch')
     plt.ylabel('Accuracy')
 
@@ -78,8 +78,8 @@ def plot_graph(train_accuracy, test_accuracy):
 
 
 def save_plot():
-    plt.savefig('./images/{}_{}_{}_{}.png'.format(
-        NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE),
+    plt.savefig('./images/{}_{}_{}_{}_{}.png'.format(
+        NUM_HIDDEN, NUM_LAYERS, LEARNING_RATE, BATCH_SIZE, KEEP_PROB),
         bbox_inches='tight')
 
 
@@ -520,7 +520,7 @@ def train():
 
 if __name__ == '__main__':
     args = get_arguments()
-    params_arr = [{'nh': 150, 'nl': 3, 'epochs': 50, 'batch_size': 50, 'keep_prob': 0.8}]
+    params_arr = [{'nh': 100, 'nl': 3, 'epochs': 50, 'batch_size': 100, 'keep_prob': 0.8}]
     for params in params_arr:
         set_parameters(**params)
         train()
